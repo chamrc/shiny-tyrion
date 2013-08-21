@@ -75,7 +75,7 @@ checkForDevelopmentFolder = (callback) ->
 		if (!__fs__.existsSync('./development'))
 			devBuild(callback) 
 		else 
-			cmd = 'grunt compileTs'
+			cmd = 'grunt compileTs --force'
 			run(cmd, callback)
 
 #-------------------------------------------------------------------------------------
