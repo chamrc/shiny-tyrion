@@ -155,7 +155,7 @@ testClient = (callback) ->
 
 test = (callback) ->
 	__async__.series([(callback) ->
-		if target >= 1 then checkForDevelopmentFolder(callback) else callback()
+		if target >= 1 then checkForDevelopmentFolder(callback) else link(callback)
 	, (callback) ->
 		if target <= 1 then testServer(callback) else callback()
 	, (callback) ->
@@ -211,7 +211,7 @@ cov = (callback) ->
 		console.log('Please make sure Mocha pass all the tests before running coverage.'.yellow)
 		preCov(callback)
 	, (callback) ->
-		if target >= 1 then checkForDevelopmentFolder(callback) else callback()
+		if target >= 1 then checkForDevelopmentFolder(callback) else link(callback)
 	, (callback) ->
 		if target <= 1 then serverCov(callback) else callback()
 	, (callback) ->
