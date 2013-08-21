@@ -1,0 +1,513 @@
+#!/usr/bin/env coffee
+
+#-------------------------------------------------------------------------------------
+# Modules
+#-------------------------------------------------------------------------------------
+
+__colors__ = require("colors")
+__async__ = require("async")
+__path__ = require("path")
+__cli__ = require("commander")
+__cp__ = require("child_process")
+__fs__ = require('fs')
+
+#-------------------------------------------------------------------------------------
+# Variables
+#-------------------------------------------------------------------------------------
+
+version = require('./package.json').version
+
+usage  = "-s [-n -p -f -c -i] | -t [<config> -T <target>] | -C [<config> -T <target>] | -h | -w\n\t ".green + "icc " + "-s [-n -p -f -c -i] | -t [<config> -T <target>] | -C [<config> -T <target>] | -h | -w\n\n  ".green
+usage += 'Note: ' + 'By default (if no option/file specified), cupcake search for file to run\n\tin the following order:\n\t '
+usage += 'cluster.js -> instance.js -> server.js -> app.js'.underline.yellow
+
+file = null
+port = null
+test = null
+config = null
+target = 1 # 0: server, 1: all & 2: client
+opencmd = if (process.platform != 'darwin') then 'xdg-open' else 'open'
+
+#-------------------------------------------------------------------------------------
+# Inputs
+#-------------------------------------------------------------------------------------
+
+
+fileinput = (val) ->
+	file = val
+
+portinput = (val) ->
+	port = val
+
+targetinput = (val) ->
+	target = if val == 's' then 0 else (if val == 'c' then 2 else 1)
+
+configinput = (val) ->
+	config = val
+
+#-------------------------------------------------------------------------------------
+# Helper
+#-------------------------------------------------------------------------------------
+
+rmDirByName = (name, callback) ->
+	cmd = "find . -name '" + name + "' -type d -print0 | xargs -0 rm -r"
+	run(cmd, callback)
+
+run = (cmd, callback) ->
+	sys = __cp__.exec(cmd, (err, stdout, stderr) ->)
+
+	sys.stdout.on('data', (data) ->
+		process.stdout.write(data)
+	)
+
+	sys.stderr.on('data', (data) ->
+		process.stderr.write(data)
+	)
+
+	sys.on('exit', () ->
+		callback() if callback
+	)
+
+checkForDevelopmentFolder = (callback) ->
+	if (__cli__.production)
+		build(callback)
+	else 
+		if (!__fs__.existsSync('./development'))
+			devBuild(callback) 
+		else 
+			cmd = 'grunt compileTs'
+			run(cmd, callback)
+
+#-------------------------------------------------------------------------------------
+# Link & unlink
+#-------------------------------------------------------------------------------------
+
+linkdir = (indir, name, sed, callback) ->
+	msg = "\tLinking directory matching name " + name + " in " + indir + " using RegExp \"" + sed + '"'
+	console.log(msg.green)
+	cmd = "find " + indir + " -name '" + name + "' -type d | while read infile; do outfile=`echo $infile | sed '" + sed + "'`; outdir=`dirname \"$outfile\"`; mkdir -p \"$outdir\"; ln -s \"$PWD/$infile\" \"$PWD/$outfile\"; done"
+	run(cmd, callback)
+
+linkFilesInDir = (indir, name, sed, callback) ->
+	msg = "\tLinking files in directory matching name " + name + " in " + indir + " using RegExp \"" + sed + '"'
+	console.log(msg.green)
+	cmd = "find " + indir + " -name '" + name + "' -type d | while read indir; do find \"$indir\" -type f | while read infile; do outfile=`echo \"$infile\" | perl -pe '" + sed + "'`; outdir=`dirname \"$outfile\"`; mkdir -p \"$outdir\" && ln -s \"$PWD/$infile\" \"$PWD/$outfile\"; done; done;"
+	run(cmd, callback)
+
+link = (callback) ->
+	__async__.series([(callback) ->
+		unlink(callback)
+	, (callback) ->
+		console.log('Symbolic linking all test files to ./tests.'.green)
+		linkdir('app', "tests", 's/^app\\\/tests/tests\\\/server/', callback)
+	, (callback) ->
+		linkdir('public', "tests", 's/^public/tests\\\/client/;s/\\\/js\\\/tests//', callback)
+	, (callback) ->
+		linkFilesInDir('public', 'src', 's|.*?\\\/js\/src\\\/|development\\\/js\\\/|', callback)
+	, (callback) ->
+		linkFilesInDir('public', 'html', 's|^.*?\\\/html\\\/|development\\\/html\\\/|', callback) 
+	, (callback) ->
+		linkFilesInDir('public', 'img', 's|^.*?\\\/img\\\/|development\\\/img\\\/|', callback)	
+	, (callback) ->
+		linkFilesInDir('public', 'locales', 's|^.*?\\\/locales\\\/|development\\\/locales\\\/|', callback)	
+	, (callback) ->
+		console.log('\tLinking less files to development folder.'.green)
+		#cmd = "mkdir development/css && find public -name 'main.less' | while read infile; do outfile=`echo \"$infile\" | sed 's/^public\\\/modules/development\\\/css/;s/^public/development\\\/css/;s/\\\/css\\\/main.less/.less/'`; ln -s \"$PWD/$infile\" \"$PWD/$outfile\"; done"
+		cmd = "mkdir -p development/css && find public/core public/modules -name 'css' -type d | while read infile; do outfile=`echo \"$infile\" | sed 's/\\\/css//;s/^public/development\\\/css/;s/modules\\\///'`; ln -s \"$PWD/$infile\" \"$PWD/$outfile\"; done"
+		run(cmd, callback)
+	, (callback) ->
+		unlinkdir('app public', callback)
+	, (callback) ->
+		copyLibraries('development', callback)
+	], (err, results) ->
+		callback() if callback
+	)
+
+unlinkdir = (dir, callback) ->
+	cmd = 'find ' + dir + ' -type l -print0 | xargs -0 rm'
+	run(cmd, callback)
+
+unlink = (callback) ->
+	console.log('Deleting libpeerconnection.log tests development .tmp coverage & production folders.'.green)
+	cmd = 'rm -r ./tests ./libpeerconnection.log ./.tmp ./development ./coverage ./production'
+	run(cmd, callback)
+
+#-------------------------------------------------------------------------------------
+# Test
+#-------------------------------------------------------------------------------------
+
+testServer = (callback) ->
+	fileurl = if config && target < 1 then config else 'tests/server'
+	msg = 'Testing server @ "' + fileurl + '"\n'
+	console.log(msg.green)
+	childEnv = process.env
+	childEnv.NODE_ENV = 'test'
+	__cp__.spawn('mocha', ['--recursive', '-R', 'spec', fileurl], {stdio: 'inherit', env: childEnv}).on('close', (data)->
+		callback() if callback
+	)
+
+testClient = (callback) ->
+	fileurl = if config && target > 1 then config else 'config/karma/all-test.conf.js'
+	msg = 'Testing client @ "' + fileurl + '"\n'
+	console.log(msg.green)
+	cmd = 'karma start "' + fileurl + '"'
+	run(cmd, callback)
+
+test = (callback) ->
+	__async__.series([(callback) ->
+		if target >= 1 then checkForDevelopmentFolder(callback) else callback()
+	, (callback) ->
+		if target <= 1 then testServer(callback) else callback()
+	, (callback) ->
+		# if (target >= 1)
+		# 	console.log('Compiling all .ts files in ./development/js folder to ./development/js/scripts.js'.green)
+		# 	cmd = "find development/js -name '*.ts' -not -name '*.d.ts' | xargs tsc --out \"development/js/scripts.js\" --sourcemap --target ES5"
+		# 	run(cmd, callback)
+		# else
+		# 	callback()
+		callback()
+	, (callback) ->
+		if target >= 1 then testClient(callback) else callback()
+	], (err, results) ->
+		callback() if callback
+	)
+
+#-------------------------------------------------------------------------------------
+# Coverage
+#-------------------------------------------------------------------------------------
+
+mkJsCov = (callback) ->
+	run('jscov app/src app/.src-cov', callback)
+
+rmJSCov = (callback) ->
+	run('rm -r app/.src-cov', callback)
+
+preCov = (callback) ->
+	mkJsCov(callback)
+
+postCov = (callback) ->
+	rmJSCov(callback)
+
+serverCov = (callback) ->
+	fileurl = if config && target < 1 then config else 'tests/server'
+	msg = 'Running code coverage for server @ "' + fileurl + '"\n'
+	console.log(msg.green)
+	cmd = 'mkdir -p coverage/server && NODE_ENV=coverage mocha --recursive "' + fileurl + '" -R html-cov > coverage/server/index.html' 
+	run(cmd, () ->
+		run(opencmd + ' coverage/server/index.html', callback)
+	)
+
+clientCov = (callback) ->
+	fileurl = if config && target > 1 then config else 'config/karma/all-cov.conf.js'
+	msg = 'Running code coverage for client @ "' + fileurl + '"\n'
+	console.log(msg.green)
+	cmd = 'karma start "' + fileurl + '"'
+	run(cmd, () ->
+		run(opencmd + ' coverage/client/*/index.html', callback)
+	)
+
+cov = (callback) ->
+	__async__.series([(callback) ->
+		console.log('Please make sure Mocha pass all the tests before running coverage.'.yellow)
+		preCov(callback)
+	, (callback) ->
+		if target >= 1 then checkForDevelopmentFolder(callback) else callback()
+	, (callback) ->
+		if target <= 1 then serverCov(callback) else callback()
+	, (callback) ->
+		if target >= 1 then clientCov(callback) else callback()
+	, (callback) ->
+		postCov(callback)
+	], (err, results) ->
+		if !err
+			console.log('Coverage report is located inside coverage folder.'.green)
+		callback() if callback
+	)
+
+#-------------------------------------------------------------------------------------
+# Build
+#-------------------------------------------------------------------------------------
+
+# Build helper
+copyAsset = (srcDir, sub, callback) ->
+	#public/libraries
+	#s|^public\/libraries\/.*?\/|.tmp\/|
+	msg = 'Copying asset from directory ' + srcDir + ' using RegExp "' + sub + '"'
+	console.log(msg.green)
+	cmd = "find " + srcDir + " -type f -not -name '.*' | while read infile; do outfile=`echo \"$infile\" | perl -pe '" + sub + "'`; outdir=`dirname \"$outfile\"`; mkdir -p \"$outdir\"; cp \"$infile\" \"$outfile\"; done"
+	run(cmd, callback)
+
+# Build production
+
+clearTmp = (callback) ->
+	console.log('Deleting .tmp & production folders.'.green)
+	cmd = 'rm -r .tmp production'
+	run(cmd, callback)
+
+buildCss = (callback) ->
+	console.log('Minifing .less files.'.green)
+	__async__.series([(callback) ->
+		cmd = "mkdir -p .tmp/css && find . -name 'main.less' | while read infile; do outfile=`echo \"$infile\" | sed 's/\\\/css\\\/main.less/.css/;s/^.\\\/public\\\/modules/.\\\/.tmp\\\/css/;s/.\\\/public/.\\\/.tmp\\\/css/'`; lessc \"$infile\" \"$outfile\" -x -yui-compress; done"
+		run(cmd, callback)
+	, (callback) ->
+		cmd = 'grunt minifyCss'
+		run(cmd, callback)
+	], (err, results) ->
+		callback() if callback
+	)
+
+buildJs = (callback) ->
+	console.log('Compiling & minifing .ts files.'.green)
+	__async__.series([(callback) ->
+		# cmd = "mkdir -p .tmp/js && find public -name 'src' | while read src; do outfile=`echo \"$src\" | sed 's/\\\/js\\\/src/.js/;s/^public\\\/modules/.tmp\\\/js/;s/^public/.tmp\\\/js/'`; find \"$src\" -name '*.ts' -not -name '*.d.ts' -type f | xargs tsc --out \"$outfile\" --target ES5; done"
+		# run(cmd, callback)
+		cmd = "mkdir -p .tmp/js && find public -name '*.ts' -not -name '*.d.ts' -type f  | xargs tsc --out \".tmp/js/scripts.js\" --target ES5;"
+		run(cmd, callback)
+	, (callback) ->
+		cmd = "find public -name 'src' -type d | while read indir;do find \"$indir\" -name '*.js' -type f | while read infile; do outfile=`echo \"$infile\" | perl -pe 's/^public\\\/modules\\\/.*?\\\//.tmp\\\//;s/^public\\\/core/.tmp/;s/\\\/src\\\//\\\//';`; outdir=`dirname \"$outfile\"`; mkdir -p \"$outdir\" && cp \"$infile\" \"$outfile\"; done; done"
+		run(cmd, callback)
+	, (callback) ->
+		cmd = 'grunt minifyJs'
+		run(cmd, callback)
+	], (err, results) ->
+		callback() if callback
+	)
+
+buildHtml = (callback) ->
+	console.log('Minifing .html files.'.green)
+	cmd = 'grunt minifyHtml'
+	run(cmd, callback)
+
+buildJson = (callback) ->
+	console.log('Minifing .json files.'.green)
+	__async__.series([(callback) ->
+		cmd = "find public -name '*.json' | while read infile; do outfile=`echo \"$infile\" | perl -pe 's|^public\/modules\/.*?\/|production\/|;s|^public\/core|production|'`; outdir=`dirname \"$outfile\"`; mkdir -p \"$PWD/$outdir\" && cp \"$PWD/$infile\" \"$PWD/$outfile\"; done"
+		run(cmd, callback)
+	, (callback) ->
+		cmd = 'grunt minifyJson'
+		run(cmd, callback)
+	], (err, results) ->
+		callback() if callback
+	)
+
+copyLibraries = (env, callback) ->
+	copyAsset('public/libraries', 's|^public\\\/libraries\\\/.*?\\\/|' + env + '\\\/|', callback)
+
+copyImages = (callback) ->
+	cmd = "mkdir -p production/img && find public -name 'img' -type d | while read indir; do find \"$indir\" -type f | while read infile; do cp \"$infile\" \"production/img\"; done; done"
+	run(cmd, callback)
+
+build = (callback) ->
+	__async__.series([(callback) ->
+		clearTmp(callback)
+	, (callback) ->
+		buildCss(callback)
+	, (callback) ->
+		buildJs(callback)
+	, (callback) ->
+		buildHtml(callback)
+	, (callback) ->
+		buildJson(callback)
+	, (callback) ->
+		copyLibraries('production', callback)
+	, (callback) ->
+		copyImages(callback)
+	, (callback) ->
+		unlinkdir('app public', callback)
+	], (err, results) ->
+		console.log('Minified build files are located @ ./production folder.'.green)
+		callback() if callback
+	)
+
+# Build development
+
+devBuild = (callback) ->
+	__async__.series([(callback) ->
+		callback()
+		# console.log('Compiling all main.less files to development/css'.green)
+		# cmd = "mkdir -p development/css && find . -name 'main.less' | while read infile; do outfile=`echo \"$infile\" | sed 's/\\\/css\\\/main.less/.css/;s/^.\\\/public\\\/modules/.\\\/development\\\/css/;s/.\\\/public/.\\\/development\\\/css/'`; lessc \"$infile\" \"$outfile\" --line-numbers=mediaquery; done"
+		# run(cmd, callback)
+	, (callback) ->
+		callback()
+		# console.log('Compiling all .ts files in ./development/js folder to ./development/js/scripts.js'.green)
+		# cmd = "find development/js -name '*.ts' -not -name '*.d.ts' | xargs tsc --out \"development/js/scripts.js\" --sourcemap --target ES5"
+		# run(cmd, callback)
+	, (callback) ->
+		link(callback)
+	, (callback) ->
+		# cmd = "find public -name '*.ts' -not -name '*.d.ts' -type f | while read infile; do echo \"$(tput setaf 2)Compiling $infile $(tput sgr0)\"; tsc \"$infile\" --sourcemap --target ES5; done"
+		cmd = "grunt compileTs --force"
+		run(cmd, callback)
+	], (err, results) ->
+		console.log('Build files are located @ ./development folder.'.green)
+		callback() if callback
+	)
+
+#-------------------------------------------------------------------------------------
+# Check if in project root
+#-------------------------------------------------------------------------------------
+
+watch = (callback) ->
+	__async__.series([(callback) ->
+		if (!__fs__.existsSync('./development')) then link(callback) else callback()
+	, (callback) ->
+		cmd = 'grunt watchTs --force'
+		run(cmd, callback)
+	], (err, results) ->
+		callback() if callback
+	)
+	
+#-------------------------------------------------------------------------------------
+# Eliminate all .d.ts .js .js.map for each .ts file in public/core and public/modules 
+#-------------------------------------------------------------------------------------
+
+eliminate = (callback) ->
+	cmd = "find public -name '*.ts' -not -name '*.d.ts' | while read infile; do js=`echo \"$infile\" | sed 's|.ts|.js|'`; d=`echo \"$infile\" | sed 's/.ts/.d.ts/'`; map=`echo \"$infile\" | sed 's/.ts/.js.map/'`; rm \"$js\"; rm \"$map\"; rm \"$d\"; done"
+	run(cmd, callback)
+
+#-------------------------------------------------------------------------------------
+# Check if in project root
+#-------------------------------------------------------------------------------------
+
+if !__fs__.existsSync('./package.json')
+	console.log('Must run cupcake in root directory of the project.'.red)
+	return
+
+#-------------------------------------------------------------------------------------
+# Define cli options
+#-------------------------------------------------------------------------------------
+
+__cli__
+	.version(version)
+	.usage(usage)
+	.option("-h, --halt", "Stop all running scripts of " + 'forever'.red + ".")
+	.option("-B, --build", "Compile and " + "minify".cyan + " stylesheet & javascript for production.")
+	.option("-b, --devBuild", "Compile and " + "minify".cyan + " stylesheet & javascript for development.")
+	.option("-e, --eliminate", "Eliminate all .d.ts .js .js.map for each .ts file in public/core and public/modules.\n")
+	.option("-w, --watch", "Watch".green + " all typescript files in public folder.\n")
+	.option("-t, --test [config]", "Unit " + "test".bold.inverse + " project using Mocha", configinput)
+	.option("-C, --coverage [config]", "Generate " + "test coverage report".underline.magenta + " using Mocha", configinput)
+	.option("-T, --target [target]", "Unit test " + "target".cyan + " (s: server, c: client, default to both.)\n", targetinput)
+	.option("-r, --remove", "Remove all temporary files & folders.\n")
+	.option("-s, --start [file]", "Start server using node [optional file] (default to development mode)\n\nStart options:\n", fileinput)
+	.option("-p, --production [port]", "Start server in " + "deployment".rainbow.bold.italic.underline + " mode. [optional port #, default: 80] (option of --start)", portinput)
+	.option("-x, --nginx", "Start server in production with " + "nginx".bold.inverse + ". (static files are served by Nginx, ignored if not in production, option of --start)\n")
+	.option("-n, --nodemon", "Start server with " + 'nodemon'.green + " instead of " + 'node'.yellow + ".  (option of --start)")
+	.option("-f, --forever", "Start server with " + 'forever'.red + ".  (option of --start)\n")
+	.option("-c, --cluster", "Start server using " + 'cluster.js'.yellow + ".  (option of --start)")
+	.option("-i, --instance", "Start server using " + 'instance.js'.yellow + ".  (option of --start)")
+	.option("-v, --server", "Start server using " + 'server.js'.yellow + ".  (option of --start)")
+	.option("-a, --app", "Start server using " + 'app.js'.yellow + ".  (option of --start)")
+	.parse(process.argv)
+
+#-------------------------------------------------------------------------------------
+# Main
+#-------------------------------------------------------------------------------------
+
+if __cli__.start
+	__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild)
+
+	__async__.series [(callback) ->
+		install = __cp__.spawn("npm", ['install'], {stdio: 'inherit'}).on('exit', () ->
+			callback()
+		)
+	, (callback) ->
+		checkForDevelopmentFolder(callback)
+
+	, (callback) ->
+		appToLaunch = if __cli__.nodemon then 'nodemon' else 'node'
+		envToLaunch = if __cli__.production then (if __cli__.nginx then "nginx" else "production") else "development"
+		portToLaunch = null
+		fileToLaunch = null
+
+		if __cli__.production
+			portToLaunch = if port then port else '80'
+
+		process.env.NODE_ENV = envToLaunch
+
+		if file
+			fileToLaunch = file
+		else if __cli__.cluster || __cli__.instance || __cli__.server || __cli__.app
+			fileToLaunch = if __cli__.cluster then 'cluster.js' else if __cli__.instance then 'instance.js' else if __cli__.server then 'server.js' else 'app.js'
+		else
+			fileToLaunch = 'app.js' if __fs__.existsSync 'app.js'
+			fileToLaunch = 'server.js' if __fs__.existsSync 'server.js'
+			fileToLaunch = 'instance.js' if __fs__.existsSync 'instance.js'
+			fileToLaunch = 'cluster.js' if __fs__.existsSync 'cluster.js'
+
+		if (!fileToLaunch || !__fs__.existsSync(fileToLaunch))
+			if (fileToLaunch)
+				console.log((fileToLaunch+' not found.').red)
+			else
+				console.log('No valid node.js app found.'.red)
+			return
+		else
+			console.log(appToLaunch.green + ' ' + fileToLaunch.yellow + (' (' + envToLaunch + (if portToLaunch then ' '+portToLaunch else '') + ')').cyan)
+
+		server = null
+
+		childEnv  = process.env
+		childEnv.NODE_ENV = envToLaunch
+		childEnv.PORT = portToLaunch if (portToLaunch)
+
+		if __cli__.production
+			if (__cli__.forever)
+				server = __cp__.spawn('/usr/bin/sudo', ['-E', 'forever', 'start', '-c', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
+			else
+				server = __cp__.spawn('/usr/bin/sudo', ['-E', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
+		else
+			if (__cli__.forever)
+				server = __cp__.spawn('forever', ['start', '-c', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
+			else
+				server = __cp__.spawn(appToLaunch, [fileToLaunch], {stdio: 'inherit', env: childEnv})
+		server.on('exit', () ->
+			callback()
+		)
+	]
+
+else if __cli__.eliminate
+	__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild || __cli__.watch)
+
+	eliminate()
+
+else if __cli__.watch
+	__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild)
+
+	watch()
+
+else if __cli__.devBuild
+	__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage)
+
+	devBuild()
+
+else if __cli__.coverage
+	__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove)
+
+	cov()
+	
+else if __cli__.remove
+	__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build)
+
+	unlink()
+		
+else if __cli__.build
+	__cli__.help() if (__cli__.test || __cli__.halt)
+
+	build()
+
+else if __cli__.halt
+	__cli__.help() if (__cli__.test)
+
+	__async__.series([(callback) ->
+		run('sudo forever stopall', callback)
+	, (callback) ->
+		run('forever stopall', callback)
+	])
+
+else if __cli__.test
+	
+	test()
+
+else __cli__.help()
+
+

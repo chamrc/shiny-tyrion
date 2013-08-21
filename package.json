@@ -1,0 +1,26 @@
+{
+    "name": "icycupcake",
+    "version": "0.5.8",
+    "description": "Command line helper",
+    "preferGlobal": "true",
+    "bin": {
+        "cupcake": "cupcake",
+        "icc": "cupcake"
+    },
+    "author": "Ranchao Zhang",
+    "engines": { "node": "*" },
+	"dependencies": {
+		"async": "*", 
+		"commander": "*",
+		"colors": "*",
+		"coffee-script": "*",
+        "nodemon": "*",
+        "forever": "*",
+        "mocha": "*",
+        "jscov": "*"
+	},
+    "repository" : {
+        "type" : "git", 
+        "url" : "https://github.com/chamrc/shiny-tyrion.git"
+    }
+}
