@@ -126,7 +126,7 @@ link = (callback) ->
 
 unlinkdir = (dir, callback) ->
 	cmd = 'find ' + dir + ' -type l -print0 | xargs -0 rm'
-	run(cmd, callback)
+	run(cmd, callback, true)
 
 unlink = (callback) ->
 	console.log('Deleting libpeerconnection.log tests development .tmp coverage & production folders.'.green)
