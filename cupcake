@@ -69,6 +69,18 @@ run = (cmd, callback, hideStdIO) ->
 		callback() if callback
 	)
 
+exec = (cmd, callback, hideStdIO) ->
+	sys = __cp__.exec(cmd, (err, stdout, stderr) ->)
+	ret = null
+	if (!hideStdIO)
+		sys.stdout.on('data', (data) ->
+			ret = data
+		)
+
+	sys.on('exit', () ->
+		callback(ret) if callback
+	)
+
 checkForDevelopmentFolder = (callback) ->
 	if (__cli__.production)
 		build(callback)
@@ -422,120 +434,143 @@ __cli__
 #-------------------------------------------------------------------------------------
 # Main
 #-------------------------------------------------------------------------------------
+main = (callback) ->
+	if __cli__.start
+		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild)
 
-if __cli__.start
-	__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild)
+		__async__.series [(callback) ->
+			install = __cp__.spawn("npm", ['install'], {stdio: 'inherit'}).on('exit', () ->
+				callback()
+			)
 
-	__async__.series [(callback) ->
-		install = __cp__.spawn("npm", ['install'], {stdio: 'inherit'}).on('exit', () ->
+		, (callback) ->
+			if (__cli__.production) then build(callback) else bake(callback)
+
+		, (callback) ->
+			if (__cli__.production) then callback()
+			process.on( 'SIGINT', () ->
+				unbake()			
+				process.exit()
+			)
 			callback()
-		)
 
-	, (callback) ->
-		if (__cli__.production) then build(callback) else bake(callback)
+		, (callback) ->
+			appToLaunch = if __cli__.nodemon then 'nodemon' else 'node'
+			envToLaunch = if __cli__.production then (if __cli__.nginx then "nginx" else "production") else "development"
+			portToLaunch = null
+			fileToLaunch = null
 
-	, (callback) ->
-		if (__cli__.production) then callback()
-		process.on( 'SIGINT', () ->
-			unbake()			
-			process.exit()
-		)
-		callback()
+			if __cli__.production
+				portToLaunch = if port then port else '80'
 
-	, (callback) ->
-		appToLaunch = if __cli__.nodemon then 'nodemon' else 'node'
-		envToLaunch = if __cli__.production then (if __cli__.nginx then "nginx" else "production") else "development"
-		portToLaunch = null
-		fileToLaunch = null
+			process.env.NODE_ENV = envToLaunch
 
-		if __cli__.production
-			portToLaunch = if port then port else '80'
-
-		process.env.NODE_ENV = envToLaunch
-
-		if file
-			fileToLaunch = file
-		else if __cli__.cluster || __cli__.instance || __cli__.server || __cli__.app
-			fileToLaunch = if __cli__.cluster then 'cluster.js' else if __cli__.instance then 'instance.js' else if __cli__.server then 'server.js' else 'app.js'
-		else
-			fileToLaunch = 'app.js' if __fs__.existsSync 'app.js'
-			fileToLaunch = 'server.js' if __fs__.existsSync 'server.js'
-			fileToLaunch = 'instance.js' if __fs__.existsSync 'instance.js'
-			fileToLaunch = 'cluster.js' if __fs__.existsSync 'cluster.js'
-
-		if (!fileToLaunch || !__fs__.existsSync(fileToLaunch))
-			if (fileToLaunch)
-				console.log((fileToLaunch+' not found.').red)
+			if file
+				fileToLaunch = file
+			else if __cli__.cluster || __cli__.instance || __cli__.server || __cli__.app
+				fileToLaunch = if __cli__.cluster then 'cluster.js' else if __cli__.instance then 'instance.js' else if __cli__.server then 'server.js' else 'app.js'
 			else
-				console.log('No valid node.js app found.'.red)
-			return
-		else
-			console.log(appToLaunch.green + ' ' + fileToLaunch.yellow + (' (' + envToLaunch + (if portToLaunch then ' '+portToLaunch else '') + ')').cyan)
+				fileToLaunch = 'app.js' if __fs__.existsSync 'app.js'
+				fileToLaunch = 'server.js' if __fs__.existsSync 'server.js'
+				fileToLaunch = 'instance.js' if __fs__.existsSync 'instance.js'
+				fileToLaunch = 'cluster.js' if __fs__.existsSync 'cluster.js'
 
-		server = null
-
-		childEnv  = process.env
-		childEnv.NODE_ENV = envToLaunch
-		childEnv.PORT = portToLaunch if (portToLaunch)
-
-		if __cli__.production
-			if (__cli__.forever)
-				server = __cp__.spawn('/usr/bin/sudo', ['-E', 'forever', 'start', '-c', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
+			if (!fileToLaunch || !__fs__.existsSync(fileToLaunch))
+				if (fileToLaunch)
+					console.log((fileToLaunch+' not found.').red)
+				else
+					console.log('No valid node.js app found.'.red)
+				return
 			else
-				server = __cp__.spawn('/usr/bin/sudo', ['-E', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
-		else
-			if (__cli__.forever)
-				server = __cp__.spawn('forever', ['start', '-c', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
+				console.log(appToLaunch.green + ' ' + fileToLaunch.yellow + (' (' + envToLaunch + (if portToLaunch then ' '+portToLaunch else '') + ')').cyan)
+
+			server = null
+
+			childEnv  = process.env
+			childEnv.NODE_ENV = envToLaunch
+			childEnv.PORT = portToLaunch if (portToLaunch)
+
+			if __cli__.production
+				if (__cli__.forever)
+					server = __cp__.spawn('/usr/bin/sudo', ['-E', 'forever', 'start', '-c', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
+				else
+					server = __cp__.spawn('/usr/bin/sudo', ['-E', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
 			else
-				server = __cp__.spawn(appToLaunch, [fileToLaunch], {stdio: 'inherit', env: childEnv})
-		server.on('exit', () ->
-			callback()
-		)
-	]
+				if (__cli__.forever)
+					server = __cp__.spawn('forever', ['start', '-c', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
+				else
+					server = __cp__.spawn(appToLaunch, [fileToLaunch], {stdio: 'inherit', env: childEnv})
+			server.on('exit', () ->
+				callback()
+			)
+		]
 
-else if __cli__.eliminate
-	__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild || __cli__.watch)
+	else if __cli__.eliminate
+		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild || __cli__.watch)
 
-	eliminate()
+		eliminate()
 
-else if __cli__.watch
-	__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild)
+	else if __cli__.watch
+		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild)
 
-	watch()
+		watch()
 
-else if __cli__.devBuild
-	__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage)
+	else if __cli__.devBuild
+		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage)
 
-	devBuild()
+		devBuild()
 
-else if __cli__.coverage
-	__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove)
+	else if __cli__.coverage
+		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove)
 
-	cov()
-	
-else if __cli__.remove
-	__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build)
-
-	unlink()
+		cov()
 		
-else if __cli__.build
-	__cli__.help() if (__cli__.test || __cli__.halt)
+	else if __cli__.remove
+		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build)
 
-	build()
+		unlink()
+			
+	else if __cli__.build
+		__cli__.help() if (__cli__.test || __cli__.halt)
 
-else if __cli__.halt
-	__cli__.help() if (__cli__.test)
+		build()
 
-	__async__.series([(callback) ->
-		run('sudo forever stopall', callback)
-	, (callback) ->
-		run('forever stopall', callback)
-	])
+	else if __cli__.halt
+		__cli__.help() if (__cli__.test)
 
-else if __cli__.test
-	
-	test()
+		__async__.series([(callback) ->
+			run('sudo forever stopall', callback)
+		, (callback) ->
+			run('forever stopall', callback)
+		])
 
-else __cli__.help()
+	else if __cli__.test
+		
+		test()
 
+	else __cli__.help()
+
+	callback()
+
+__async__.waterfall([(callback) ->
+	process.stdout.write('Checking icycupcake version ... '.green)
+
+	cmd = 'npm show icycupcake version'
+	exec(cmd, (data) ->
+		data = data.replace(/\s+/g, '');
+		callback(null, data == version)
+	)
+
+, (isLatest, callback) ->
+	if isLatest
+		console.log('Already at latest version'.green)
+		callback()
+	else
+		console.log('Updating icycupcake'.green)
+		cmd = 'npm i -g icycupcake'
+		run(cmd, callback)
+
+, (callback) ->
+	main(callback)
+])
 
