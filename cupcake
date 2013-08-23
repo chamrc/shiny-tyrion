@@ -567,7 +567,10 @@ __async__.waterfall([(callback) ->
 		callback()
 	else
 		console.log('Updating icycupcake'.green)
-		cmd = 'npm i -g icycupcake'
+		if (process.platform != 'darwin') # Ubuntu
+			cmd = 'sudo npm i -g icycupcake'
+		else
+			cmd = 'npm i -g icycupcake'
 		run(cmd, callback)
 
 , (callback) ->
