@@ -344,6 +344,29 @@ devBuild = (callback) ->
 	)
 
 #-------------------------------------------------------------------------------------
+# Start watcher / mongod in a screen window
+#-------------------------------------------------------------------------------------
+
+bake = (callback) ->
+	console.log('\nStarting mongodb and typescript watcher\n'.green)
+	cmd = 'utilities/bake.sh'
+	run(cmd, callback)
+
+unbake = (callback) ->
+	__async__.series([(callback) ->
+		console.log('\nStopping mongodb and typescript watcher\n'.green)
+		cmd = 'screen -X quit'
+		run(cmd, callback)
+	, (callback) ->
+		if (process.platform != 'darwin')
+			cmd = 'sudo service mongodb stop'
+			run(cmd, callback)
+		else callback()
+	], (err, results) ->
+		callback() if callback
+	)
+
+#-------------------------------------------------------------------------------------
 # Check if in project root
 #-------------------------------------------------------------------------------------
 
@@ -413,6 +436,18 @@ if __cli__.start
 		)
 	, (callback) ->
 		checkForDevelopmentFolder(callback)
+
+	, (callback) ->
+		if (__cli__.production) then callback()
+		bake(callback)
+
+	, (callback) ->
+		if (__cli__.production) then callback()
+		process.on( 'SIGINT', () ->
+			unbake()			
+			process.exit()
+		)
+		callback()
 
 	, (callback) ->
 		appToLaunch = if __cli__.nodemon then 'nodemon' else 'node'
