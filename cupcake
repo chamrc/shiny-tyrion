@@ -434,12 +434,9 @@ if __cli__.start
 		install = __cp__.spawn("npm", ['install'], {stdio: 'inherit'}).on('exit', () ->
 			callback()
 		)
-	, (callback) ->
-		checkForDevelopmentFolder(callback)
 
 	, (callback) ->
-		if (__cli__.production) then callback()
-		bake(callback)
+		if (__cli__.production) then build(callback) else bake(callback)
 
 	, (callback) ->
 		if (__cli__.production) then callback()
