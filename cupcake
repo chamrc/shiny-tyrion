@@ -53,16 +53,17 @@ rmDirByName = (name, callback) ->
 	cmd = "find . -name '" + name + "' -type d -print0 | xargs -0 rm -r"
 	run(cmd, callback)
 
-run = (cmd, callback) ->
+run = (cmd, callback, hideStdIO) ->
 	sys = __cp__.exec(cmd, (err, stdout, stderr) ->)
 
-	sys.stdout.on('data', (data) ->
-		process.stdout.write(data)
-	)
+	if (!hideStdIO)
+		sys.stdout.on('data', (data) ->
+			process.stdout.write(data)
+		)
 
-	sys.stderr.on('data', (data) ->
-		process.stderr.write(data)
-	)
+		sys.stderr.on('data', (data) ->
+			process.stderr.write(data)
+		)
 
 	sys.on('exit', () ->
 		callback() if callback
@@ -130,7 +131,7 @@ unlinkdir = (dir, callback) ->
 unlink = (callback) ->
 	console.log('Deleting libpeerconnection.log tests development .tmp coverage & production folders.'.green)
 	cmd = 'rm -r ./tests ./libpeerconnection.log ./.tmp ./development ./coverage ./production'
-	run(cmd, callback)
+	run(cmd, callback, true)
 
 #-------------------------------------------------------------------------------------
 # Test
