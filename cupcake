@@ -345,7 +345,7 @@ devBuild = (callback) ->
 	)
 
 #-------------------------------------------------------------------------------------
-# Start watcher / mongod in a screen window
+# Start or stop watcher / mongod in a screen window
 #-------------------------------------------------------------------------------------
 
 bake = (callback) ->
@@ -356,13 +356,8 @@ bake = (callback) ->
 unbake = (callback) ->
 	__async__.series([(callback) ->
 		console.log('\nStopping mongodb and typescript watcher\n'.green)
-		cmd = 'screen -X quit'
+		cmd = 'utilities/unbake.sh'
 		run(cmd, callback)
-	, (callback) ->
-		if (process.platform != 'darwin')
-			cmd = 'sudo service mongodb stop'
-			run(cmd, callback)
-		else callback()
 	], (err, results) ->
 		callback() if callback
 	)
