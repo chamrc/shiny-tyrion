@@ -571,7 +571,10 @@ __async__.waterfall([(callback) ->
 			cmd = 'sudo npm i -g icycupcake'
 		else
 			cmd = 'npm i -g icycupcake'
-		run(cmd, callback)
+		run(cmd, () ->
+			console.log('Please rerun your previous script command.'.green)
+			process.kill()
+		)
 
 , (callback) ->
 	main(callback)
