@@ -1,6 +1,6 @@
 {
 	"name": "icycupcake",
-	"version": "0.7.0",
+	"version": "0.7.2",
 	"description": "Command line helper",
 	"preferGlobal": "true",
 	"bin": {
