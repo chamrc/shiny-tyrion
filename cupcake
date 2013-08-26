@@ -6,6 +6,8 @@
 
 __colors__ = require("colors")
 __async__ = require("async")
+__html__ = require("htmlparser")
+__walk__ = require("walk")
 __path__ = require("path")
 __cli__ = require("commander")
 __cp__ = require("child_process")
@@ -149,6 +151,7 @@ unlink = (callback) ->
 # Test
 #-------------------------------------------------------------------------------------
 
+# Server Test
 testServer = (callback) ->
 	fileurl = if config && target < 1 then config else 'tests/server'
 	msg = 'Testing server @ "' + fileurl + '"\n'
@@ -159,12 +162,60 @@ testServer = (callback) ->
 		callback() if callback
 	)
 
+# Client Test
+prepareHTMLsForTests = (callback) ->
+	__async__.waterfall([(callback) ->
+		htmlFiles = [];
+		walker = __walk__.walk('./tests/client/html', { followLinks: false })
+		walker.on('file', (root, stat, next) ->
+			match = stat.name.match(/\.[^.]+$/)
+			
+			if (stat.type == 'file' && match && match[0] == '.html')
+				htmlFiles.push(root + '/' + stat.name)
+
+			next()
+		)
+
+		walker.on('end', () ->
+			callback(null, htmlFiles)
+		)
+	, (htmlFiles, callback) ->
+		console.log(htmlFiles)
+	], (err, results) ->
+		callback() if callback
+	)
+
 testClient = (callback) ->
-	fileurl = if config && target > 1 then config else 'config/karma/all-test.conf.js'
-	msg = 'Testing client @ "' + fileurl + '"\n'
-	console.log(msg.green)
-	cmd = 'karma start "' + fileurl + '"'
-	run(cmd, callback)
+	__async__.series([(callback) ->
+		console.log('Generating HTML files from views/**/*.jade'.green)
+		cmd = "find views -name '*.jade' -not -name 'layout.jade' | while read infile; do outfile=`echo \"$infile\" | sed 's|^views|tests\\\/client\\\/html|;s|.jade|.html|'`; outdir=`dirname \"$outfile\"`; mkdir -p \"$outdir\" && jade --pretty --out \"$outdir\" \"$infile\"; done"
+		run(cmd, callback)
+	, (callback) ->
+		prepareHTMLsForTests(callback)		
+	, (callback) ->
+		console.log('Starting server @ localhost:3000'.green)
+		process.on( 'SIGINT', () ->
+			console.log('Stopping server'.red)
+			cmd = 'utilities/hooks/post-test.sh'
+			run(cmd, () ->
+				process.exit()
+			)
+		)
+
+		cmd = 'utilities/hooks/pre-test.sh'
+		run(cmd, callback)
+	, (callback) ->
+		fileurl = if config && target > 1 then config else 'config/karma/all-test.conf.js'
+		msg = 'Testing client @ "' + fileurl + '"\n'
+		console.log(msg.green)
+		cmd = 'karma start "' + fileurl + '"'
+		run(cmd, callback)
+	], (err, results) ->
+		console.log('Stopping server'.green)
+		cmd = 'utilities/hooks/post-test.sh'
+		run(cmd, callback)
+	)
+	
 
 test = (callback) ->
 	__async__.series([(callback) ->
@@ -362,13 +413,13 @@ devBuild = (callback) ->
 
 bake = (callback) ->
 	console.log('\nStarting mongodb and typescript watcher\n'.green)
-	cmd = 'utilities/bake.sh'
+	cmd = 'utilities/hooks/pre-dev.sh'
 	run(cmd, callback)
 
 unbake = (callback) ->
 	__async__.series([(callback) ->
 		console.log('\nStopping mongodb and typescript watcher\n'.green)
-		cmd = 'utilities/unbake.sh'
+		cmd = 'utilities/hooks/post-dev.sh'
 		run(cmd, callback)
 	], (err, results) ->
 		callback() if callback
