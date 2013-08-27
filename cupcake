@@ -7,7 +7,6 @@
 __cheerio__ = require('cheerio')
 __colors__ = require("colors")
 __async__ = require("async")
-#__html__ = require("htmlparser")
 __walk__ = require("walk")
 __path__ = require("path")
 __cli__ = require("commander")
@@ -51,6 +50,9 @@ configinput = (val) ->
 #-------------------------------------------------------------------------------------
 # Helper
 #-------------------------------------------------------------------------------------
+
+String.prototype.contains = (text) ->
+	return this.indexOf(text) != -1
 
 rmDirByName = (name, callback) ->
 	cmd = "find . -name '" + name + "' -type d -print0 | xargs -0 rm -r"
@@ -164,19 +166,62 @@ testServer = (callback) ->
 	)
 
 # Client Test
+writeHeadForTests = (out, $, callback) ->
+	if out.contains('_head') || out.contains('_body')
+		if callback then return callback() else return
+
+	out = out.replace('.html', '_head.js')
+	styles = []
+	scripts = []
+	src = null
+
+	for style in $('head link')
+		if (!style || !style.attribs || !style.attribs.href) then continue else src = style.attribs.href
+		src = src.replace('/static/', '/development/') if (src.indexOf('http') == -1) 
+		styles.push(src)
+
+	for script in $('head script')
+		if (!script || !script.attribs || !script.attribs.src) then continue else src = script.attribs.src
+		src = src.replace('/static/', '/development/') if (src.indexOf('http') == -1) 
+		scripts.push(src)
+
+	data = styles: styles, scripts: scripts
+	data = 'module.exports = ' + JSON.stringify(data)
+
+	__fs__.writeFile(out, data, (err) ->
+		console.log('  |___generated '.grey + out.cyan)
+		if err then callback(err) else callback()
+	)
+
+writeBodyForTests = (out, $, callback) ->
+	if out.contains('_head') || out.contains('_body')
+		if callback then return callback() else return
+
+	out = out.replace('.html', '_body.html')
+	__fs__.writeFile(out, $('body').html(), (err) ->
+		console.log('  |___generated '.grey + out.cyan + '\n')
+		if err then callback(err) else callback()
+	)
+
 splitHTMLForTests = (html, callback) ->
 	__async__.waterfall([(callback) ->
 		__fs__.readFile(html, 'utf8', (err, data) ->
 			if err then callback(err) else callback(null, data)
 		)
 	, (data, callback) ->
-		console.log(data)
 		$ = __cheerio__.load(data)
 
-		console.log($('script'))
-		callback()
+		callback(null, $)
+	, ($, callback) ->
+		__async__.parallel([(callback) ->
+				writeHeadForTests(html, $, callback)
+		, (callback) ->
+			writeBodyForTests(html, $, callback)
+		], (err, results) ->
+			if (err) then callback(err) else callback()
+		)
 	], (err, result) ->
-		callback()
+		callback() if callback
 	);
 	
 
