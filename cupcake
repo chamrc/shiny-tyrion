@@ -4,9 +4,10 @@
 # Modules
 #-------------------------------------------------------------------------------------
 
+__cheerio__ = require('cheerio')
 __colors__ = require("colors")
 __async__ = require("async")
-__html__ = require("htmlparser")
+#__html__ = require("htmlparser")
 __walk__ = require("walk")
 __path__ = require("path")
 __cli__ = require("commander")
@@ -163,13 +164,29 @@ testServer = (callback) ->
 	)
 
 # Client Test
+splitHTMLForTests = (html, callback) ->
+	__async__.waterfall([(callback) ->
+		__fs__.readFile(html, 'utf8', (err, data) ->
+			if err then callback(err) else callback(null, data)
+		)
+	, (data, callback) ->
+		console.log(data)
+		$ = __cheerio__.load(data)
+
+		console.log($('script'))
+		callback()
+	], (err, result) ->
+		callback()
+	);
+	
+
 prepareHTMLsForTests = (callback) ->
 	__async__.waterfall([(callback) ->
 		htmlFiles = [];
 		walker = __walk__.walk('./tests/client/html', { followLinks: false })
 		walker.on('file', (root, stat, next) ->
 			match = stat.name.match(/\.[^.]+$/)
-			
+
 			if (stat.type == 'file' && match && match[0] == '.html')
 				htmlFiles.push(root + '/' + stat.name)
 
@@ -180,7 +197,8 @@ prepareHTMLsForTests = (callback) ->
 			callback(null, htmlFiles)
 		)
 	, (htmlFiles, callback) ->
-		console.log(htmlFiles)
+		__async__.each(htmlFiles, splitHTMLForTests, callback)
+
 	], (err, results) ->
 		callback() if callback
 	)
@@ -465,7 +483,8 @@ __cli__
 	.option("-h, --halt", "Stop all running scripts of " + 'forever'.red + ".")
 	.option("-B, --build", "Compile and " + "minify".cyan + " stylesheet & javascript for production.")
 	.option("-b, --devBuild", "Compile and " + "minify".cyan + " stylesheet & javascript for development.")
-	.option("-e, --eliminate", "Eliminate all .d.ts .js .js.map for each .ts file in public/core and public/modules.\n")
+	.option("-e, --eliminate", "Eliminate all .d.ts .js .js.map for each .ts file in public/core and public/modules.")
+	.option("-u, --update", "Update IcyCupCake.\n")
 	.option("-w, --watch", "Watch".green + " all typescript files in public folder.\n")
 	.option("-t, --test [config]", "Unit " + "test".bold.inverse + " project using Mocha", configinput)
 	.option("-C, --coverage [config]", "Generate " + "test coverage report".underline.magenta + " using Mocha", configinput)
@@ -628,6 +647,6 @@ __async__.waterfall([(callback) ->
 		)
 
 , (callback) ->
-	main(callback)
+	main(callback) if (!__cli__.update)
 ])
 

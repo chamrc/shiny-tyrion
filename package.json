@@ -18,8 +18,8 @@
     "coffee-script": "*",
     "mocha": "~1.12.0",
     "chai": "~1.7.2",
-    "htmlparser": "~1.7.6",
-    "walk": "~2.2.1"
+    "walk": "~2.2.1",
+    "cheerio": "~0.12.1"
   },
   "repository": {
     "type": "git",
