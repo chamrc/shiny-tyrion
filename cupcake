@@ -552,6 +552,38 @@ eliminate = (callback) ->
 	run(cmd, callback)
 
 #-------------------------------------------------------------------------------------
+# Automatic update
+#-------------------------------------------------------------------------------------
+
+update = (callback) ->
+	__async__.waterfall([(callback) ->
+		process.stdout.write('Checking icycupcake version ... '.green)
+
+		cmd = 'npm show icycupcake version'
+		exec(cmd, (data) ->
+			data = data.replace(/\s+/g, '');
+			callback(null, data == version)
+		)
+
+	, (isLatest, callback) ->
+		if isLatest
+			console.log('Already at latest version'.green)
+			callback()
+		else
+			console.log('Updating icycupcake'.green)
+			if (process.platform != 'darwin') # Ubuntu
+				cmd = 'sudo npm i -g icycupcake'
+			else
+				cmd = 'npm i -g icycupcake'
+			run(cmd, () ->
+				console.log('Please rerun your previous script command.'.green) if (!__cli__.update)
+				process.kill()
+			)
+	], (err, results) ->
+		callback() if callback
+	)
+
+#-------------------------------------------------------------------------------------
 # Check if in project root
 #-------------------------------------------------------------------------------------
 
@@ -570,7 +602,8 @@ __cli__
 	.option("-B, --build", "Compile and " + "minify".cyan + " stylesheet & javascript for production.")
 	.option("-b, --devBuild", "Compile and " + "minify".cyan + " stylesheet & javascript for development.")
 	.option("-e, --eliminate", "Eliminate all .d.ts .js .js.map for each .ts file in public/core and public/modules.")
-	.option("-u, --update", "Update IcyCupCake.\n")
+	.option("-u, --update", "Manually update IcyCupCake.\n")
+	.option("-S, --skip", "Skip automatic update for IcyCupCake.\n")
 	.option("-w, --watch", "Watch".green + " all typescript files in public folder.\n")
 	.option("-t, --test [config]", "Unit " + "test".bold.inverse + " project using Mocha", configinput)
 	.option("-C, --coverage [config]", "Generate " + "test coverage report".underline.magenta + " using Mocha", configinput)
@@ -594,7 +627,7 @@ main = (callback) ->
 	if __cli__.start
 		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild)
 
-		__async__.series [(callback) ->
+		__async__.series([(callback) ->
 			install = __cp__.spawn("npm", ['install'], {stdio: 'inherit'}).on('exit', () ->
 				callback()
 			)
@@ -659,7 +692,7 @@ main = (callback) ->
 			server.on('exit', () ->
 				callback()
 			)
-		]
+		])
 
 	else if __cli__.eliminate
 		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild || __cli__.watch)
@@ -708,31 +741,12 @@ main = (callback) ->
 
 	callback()
 
-__async__.waterfall([(callback) ->
-	process.stdout.write('Checking icycupcake version ... '.green)
+#-------------------------------------------------------------------------------------
+# IcyCupCake Code Entry Point
+#-------------------------------------------------------------------------------------
 
-	cmd = 'npm show icycupcake version'
-	exec(cmd, (data) ->
-		data = data.replace(/\s+/g, '');
-		callback(null, data == version)
-	)
-
-, (isLatest, callback) ->
-	if isLatest
-		console.log('Already at latest version'.green)
-		callback()
-	else
-		console.log('Updating icycupcake'.green)
-		if (process.platform != 'darwin') # Ubuntu
-			cmd = 'sudo npm i -g icycupcake'
-		else
-			cmd = 'npm i -g icycupcake'
-		run(cmd, () ->
-			console.log('Please rerun your previous script command.'.green)
-			process.kill()
-		)
-
+__async__.series([(callback) ->
+	if __cli__.skip then callback() else update(callback)
 , (callback) ->
-	main(callback) if (!__cli__.update)
+	main(callback)
 ])
-
