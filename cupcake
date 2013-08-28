@@ -252,19 +252,7 @@ prepareHTMLsForTests = (callback) ->
 
 testClient = (callback) ->
 	__async__.series([(callback) ->
-		console.log('Compiling LESS files from public/**/main.less to tests/client/.tmp/css'.green)
-		cmd = "find . -name 'main.less' | while read infile; do outfile=`echo \"$infile\" | sed 's/\\\/css\\\/main.less/.css/;s/^.\\\/public\\\/modules/.\\\/tests\\\/client\\\/.tmp\\\/css/;s/.\\\/public/.\\\/tests\\\/client\\\/.tmp\\\/css/'`; lessc \"$infile\" \"$outfile\"; done"
-		run(cmd, callback)
-	, (callback) ->
-		console.log('Generating HTML files from views/**/*.jade to tests/client/.tmp/html'.green)
-		cmd = "find views -name '*.jade' -not -name 'layout.jade' | while read infile; do outfile=`echo \"$infile\" | sed 's|^views|tests\\\/client\\\/.tmp\\\/html|;s|.jade|.html|'`; outdir=`dirname \"$outfile\"`; mkdir -p \"$outdir\" && jade --pretty --out \"$outdir\" \"$infile\"; done"
-		run(cmd, callback)
-	, (callback) ->
-		cmd = "rm \"$PWD/development/tests\" && ln -s \"$PWD/tests/client/.tmp\" \"$PWD/development/tests\""
-		console.log('here')
-		run(cmd, callback)
-	, (callback) ->
-		prepareHTMLsForTests(callback)		
+		testBuild(callback)	
 
 	, (callback) ->
 		console.log('Starting server @ localhost:3000'.green)
@@ -336,12 +324,36 @@ serverCov = (callback) ->
 	)
 
 clientCov = (callback) ->
-	fileurl = if config && target > 1 then config else 'config/karma/all-cov.conf.js'
-	msg = 'Running code coverage for client @ "' + fileurl + '"\n'
-	console.log(msg.green)
-	cmd = 'karma start "' + fileurl + '"'
-	run(cmd, () ->
-		run(opencmd + ' coverage/client/*/index.html', callback)
+	__async__.series([(callback) ->
+		testBuild(callback)
+	, (callback) ->
+		console.log('Starting server @ localhost:3000'.green)
+		process.on( 'SIGINT', () ->
+			console.log('Stopping server'.red)
+			cmd = 'utilities/hooks/post-test.sh'
+			run(cmd, () ->
+				process.exit()
+			)
+		)
+
+		cmd = 'utilities/hooks/pre-test.sh'
+		run(cmd, callback)
+	, (callback) ->
+		fileurl = if config && target > 1 then config else 'config/karma/all-cov.conf.js'
+		msg = 'Running code coverage for client @ "' + fileurl + '"\n'
+		console.log(msg.green)
+		cmd = 'karma start "' + fileurl + '"'
+		run(cmd, () ->
+			run(opencmd + ' coverage/client/*/index.html', callback)
+		)
+	, (callback) ->
+		console.log('Stopping server'.green)
+		cmd = 'utilities/hooks/post-test.sh'
+		run(cmd, callback)
+	], (err, results) ->
+		if !err
+			console.log('Coverage report is located inside coverage folder.'.green)
+		callback() if callback
 	)
 
 cov = (callback) ->
@@ -478,6 +490,24 @@ devBuild = (callback) ->
 		run(cmd, callback)
 	], (err, results) ->
 		console.log('Build files are located @ ./development folder.'.green)
+		callback() if callback
+	)
+
+testBuild = (callback) ->
+	__async__.series([(callback) ->
+		console.log('Compiling LESS files from public/**/main.less to tests/client/.tmp/css'.green)
+		cmd = "find . -name 'main.less' | while read infile; do outfile=`echo \"$infile\" | sed 's/\\\/css\\\/main.less/.css/;s/^.\\\/public\\\/modules/.\\\/tests\\\/client\\\/.tmp\\\/css/;s/.\\\/public/.\\\/tests\\\/client\\\/.tmp\\\/css/'`; lessc \"$infile\" \"$outfile\"; done"
+		run(cmd, callback)
+	, (callback) ->
+		console.log('Generating HTML files from views/**/*.jade to tests/client/.tmp/html'.green)
+		cmd = "find views -name '*.jade' -not -name 'layout.jade' | while read infile; do outfile=`echo \"$infile\" | sed 's|^views|tests\\\/client\\\/.tmp\\\/html|;s|.jade|.html|'`; outdir=`dirname \"$outfile\"`; mkdir -p \"$outdir\" && jade --pretty --out \"$outdir\" \"$infile\"; done"
+		run(cmd, callback)
+	, (callback) ->
+		cmd = "rm \"$PWD/development/tests\" && ln -s \"$PWD/tests/client/.tmp\" \"$PWD/development/tests\""
+		run(cmd, callback)
+	, (callback) ->
+		prepareHTMLsForTests(callback)	
+	], (err, results) ->
 		callback() if callback
 	)
 
