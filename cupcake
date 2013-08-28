@@ -504,7 +504,7 @@ testBuild = (callback) ->
 		run(cmd, callback)
 	, (callback) ->
 		cmd = "rm \"$PWD/development/tests\" && ln -s \"$PWD/tests/client/.tmp\" \"$PWD/development/tests\""
-		run(cmd, callback)
+		run(cmd, callback, true)
 	, (callback) ->
 		prepareHTMLsForTests(callback)	
 	], (err, results) ->
