@@ -29,7 +29,6 @@ test = null
 config = null
 target = 1 # 0: server, 1: all & 2: client
 opencmd = if (process.platform != 'darwin') then 'xdg-open' else 'open'
-scriptprefix = if (process.platform != 'darwin') then 'sudo ' else ''
 
 #-------------------------------------------------------------------------------------
 # Inputs
@@ -259,13 +258,13 @@ testClient = (callback) ->
 		console.log('Starting server @ localhost:3000'.green)
 		process.on( 'SIGINT', () ->
 			console.log('Stopping server'.red)
-			cmd = scriptprefix + 'utilities/hooks/post-test.sh'
+			cmd =  'utilities/hooks/post-test.sh'
 			run(cmd, () ->
 				process.exit()
 			)
 		)
 
-		cmd = scriptprefix + 'utilities/hooks/pre-test.sh'
+		cmd =  'utilities/hooks/pre-test.sh'
 		run(cmd, callback)
 	, (callback) ->
 		fileurl = if config && target > 1 then config else 'config/karma/all-test.conf.js'
@@ -275,7 +274,7 @@ testClient = (callback) ->
 		run(cmd, callback)
 	], (err, results) ->
 		console.log('Stopping server'.green)
-		cmd = scriptprefix + 'utilities/hooks/post-test.sh'
+		cmd =  'utilities/hooks/post-test.sh'
 		run(cmd, callback)
 	)
 	
@@ -331,13 +330,13 @@ clientCov = (callback) ->
 		console.log('Starting server @ localhost:3000'.green)
 		process.on( 'SIGINT', () ->
 			console.log('Stopping server'.red)
-			cmd = scriptprefix + 'utilities/hooks/post-test.sh'
+			cmd =  'utilities/hooks/post-test.sh'
 			run(cmd, () ->
 				process.exit()
 			)
 		)
 
-		cmd = scriptprefix + 'utilities/hooks/pre-test.sh'
+		cmd =  'utilities/hooks/pre-test.sh'
 		run(cmd, callback)
 	, (callback) ->
 		fileurl = if config && target > 1 then config else 'config/karma/all-cov.conf.js'
@@ -349,7 +348,7 @@ clientCov = (callback) ->
 		)
 	, (callback) ->
 		console.log('Stopping server'.green)
-		cmd = scriptprefix + 'utilities/hooks/post-test.sh'
+		cmd =  'utilities/hooks/post-test.sh'
 		run(cmd, callback)
 	], (err, results) ->
 		if !err
@@ -518,13 +517,13 @@ testBuild = (callback) ->
 
 bake = (callback) ->
 	console.log('\nStarting mongodb and typescript watcher\n'.green)
-	cmd = scriptprefix + 'utilities/hooks/pre-dev.sh'
+	cmd =  'utilities/hooks/pre-dev.sh'
 	run(cmd, callback)
 
 unbake = (callback) ->
 	__async__.series([(callback) ->
 		console.log('\nStopping mongodb and typescript watcher\n'.green)
-		cmd = scriptprefix + 'utilities/hooks/post-dev.sh'
+		cmd =  'utilities/hooks/post-dev.sh'
 		run(cmd, callback)
 	], (err, results) ->
 		callback() if callback
