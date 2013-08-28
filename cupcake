@@ -748,5 +748,5 @@ main = (callback) ->
 __async__.series([(callback) ->
 	if __cli__.skip then callback() else update(callback)
 , (callback) ->
-	main(callback)
+	main(callback) if !__cli__.update
 ])
