@@ -70,8 +70,8 @@ run = (cmd, callback, hideStdIO) ->
 			process.stderr.write(data)
 		)
 
-	sys.on('exit', () ->
-		callback() if callback
+	sys.on('exit', (code, signal) ->
+		callback(null, code, signal) if callback
 	)
 
 exec = (cmd, callback, hideStdIO) ->
@@ -161,8 +161,9 @@ testServer = (callback) ->
 	console.log(msg.green)
 	childEnv = process.env
 	childEnv.NODE_ENV = 'test'
-	__cp__.spawn('mocha', ['--recursive', '-R', 'spec', fileurl], {stdio: 'inherit', env: childEnv}).on('close', (data)->
-		callback() if callback
+	cmd = 'mocha --recursive -R spec ' + fileurl
+	run(cmd, (err, code, signal) ->
+		callback(err, code) if callback
 	)
 
 # Client Test
@@ -251,6 +252,7 @@ prepareHTMLsForTests = (callback) ->
 	)
 
 testClient = (callback) ->
+	exitCode = 0
 	__async__.series([(callback) ->
 		testBuild(callback)	
 
@@ -271,31 +273,36 @@ testClient = (callback) ->
 		msg = 'Testing client @ "' + fileurl + '"\n'
 		console.log(msg.green)
 		cmd = 'karma start "' + fileurl + '"'
-		run(cmd, callback)
-	], (err, results) ->
+		run(cmd, (err, code, signal) ->
+			exitCode = code if code && !err
+			callback()
+		)
+	, (callback) ->
 		console.log('Stopping server'.green)
 		cmd =  'utilities/hooks/post-test.sh'
-		run(cmd, callback)
+		run(cmd, callback, true)
+	], (err, results) ->
+		callback(err, exitCode) if callback
 	)
 	
 
 test = (callback) ->
 	__async__.series([(callback) ->
-		if target >= 1 then checkForDevelopmentFolder(callback) else link(callback)
+		if target >= 1 then checkForDevelopmentFolder(callback) else link(callback, 0)
 	, (callback) ->
-		if target <= 1 then testServer(callback) else callback()
-	, (callback) ->
+		if target <= 1 then testServer(callback) else callback(null, 0)
+	# , (callback) ->
 		# if (target >= 1)
 		# 	console.log('Compiling all .ts files in ./development/js folder to ./development/js/scripts.js'.green)
 		# 	cmd = "find development/js -name '*.ts' -not -name '*.d.ts' | xargs tsc --out \"development/js/scripts.js\" --sourcemap --target ES5"
 		# 	run(cmd, callback)
 		# else
 		# 	callback()
-		callback()
 	, (callback) ->
-		if target >= 1 then testClient(callback) else callback()
+		if target >= 1 then testClient(callback) else callback(null, 0)
 	], (err, results) ->
-		callback() if callback
+		exitCode = results[1] | results[2]
+		process.exit(exitCode)
 	)
 
 #-------------------------------------------------------------------------------------
@@ -324,6 +331,7 @@ serverCov = (callback) ->
 	)
 
 clientCov = (callback) ->
+	exitCode = 0
 	__async__.series([(callback) ->
 		testBuild(callback)
 	, (callback) ->
@@ -343,7 +351,8 @@ clientCov = (callback) ->
 		msg = 'Running code coverage for client @ "' + fileurl + '"\n'
 		console.log(msg.green)
 		cmd = 'karma start "' + fileurl + '"'
-		run(cmd, () ->
+		run(cmd, (err, code, signal) ->
+			exitCode = code if code && !err
 			run(opencmd + ' coverage/client/*/index.html', callback)
 		)
 	, (callback) ->
@@ -351,9 +360,8 @@ clientCov = (callback) ->
 		cmd =  'utilities/hooks/post-test.sh'
 		run(cmd, callback)
 	], (err, results) ->
-		if !err
-			console.log('Coverage report is located inside coverage folder.'.green)
-		callback() if callback
+		console.log('Coverage report is located inside coverage folder.'.green) if !err
+		callback(null, exitCode) if callback
 	)
 
 cov = (callback) ->
