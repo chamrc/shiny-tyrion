@@ -602,7 +602,7 @@ __cli__
 	.option("-B, --build", "Compile and " + "minify".cyan + " stylesheet & javascript for production.")
 	.option("-b, --devBuild", "Compile and " + "minify".cyan + " stylesheet & javascript for development.")
 	.option("-e, --eliminate", "Eliminate all .d.ts .js .js.map for each .ts file in public/core and public/modules.")
-	.option("-u, --update", "Manually update IcyCupCake.\n")
+	.option("-u, --update", "Manually update IcyCupCake.")
 	.option("-S, --skip", "Skip automatic update for IcyCupCake.\n")
 	.option("-w, --watch", "Watch".green + " all typescript files in public folder.\n")
 	.option("-t, --test [config]", "Unit " + "test".bold.inverse + " project using Mocha", configinput)
