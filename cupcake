@@ -687,7 +687,7 @@ main = (callback) ->
 			callback()
 
 		, (callback) ->
-			appToLaunch = if __cli__.nodemon then 'nodemon' else 'node'
+			appToLaunch = if __cli__.nodemon then (if process.platform != 'darwin' then 'supervisor' else 'nodemon') else 'node'
 			envToLaunch = if __cli__.production then (if __cli__.nginx then "nginx" else "production") else "development"
 			portToLaunch = null
 			fileToLaunch = null
