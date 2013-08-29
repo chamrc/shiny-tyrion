@@ -62,6 +62,7 @@ run = (cmd, callback, hideStdIO) ->
 	sys = __cp__.exec(cmd, (err, stdout, stderr) ->)
 
 	if (!hideStdIO)
+
 		sys.stdout.on('data', (data) ->
 			process.stdout.write(data)
 		)
@@ -272,7 +273,12 @@ testClient = (callback) ->
 		fileurl = if config && target > 1 then config else 'config/karma/all-test.conf.js'
 		msg = 'Testing client @ "' + fileurl + '"\n'
 		console.log(msg.green)
-		cmd = 'karma start "' + fileurl + '"'
+
+		cmd = 'karma start "' + fileurl + '" '
+		cmd += '--single-run --no-auto-watch' if !__cli__.multiruns
+
+		console.log(cmd)
+
 		run(cmd, (err, code, signal) ->
 			exitCode = code if code && !err
 			callback()
@@ -350,7 +356,9 @@ clientCov = (callback) ->
 		fileurl = if config && target > 1 then config else 'config/karma/all-cov.conf.js'
 		msg = 'Running code coverage for client @ "' + fileurl + '"\n'
 		console.log(msg.green)
-		cmd = 'karma start "' + fileurl + '"'
+		cmd = 'karma start "' + fileurl + '" '
+		cmd += 'no-single-run  --auto-watch' if __cli__.multiruns
+
 		run(cmd, (err, code, signal) ->
 			exitCode = code if code && !err
 			run(opencmd + ' coverage/client/*/index.html', callback)
@@ -701,8 +709,7 @@ main = (callback) ->
 			childEnv.PORT = portToLaunch if (portToLaunch)
 
 			if __cli__.debug
-				cmd = 'node debug ' + fileToLaunch
-				run(cmd, callback)
+				server = __cp__.spawn('node', ['debug', fileToLaunch], {stdio: 'inherit', env: childEnv})
 			else
 				if __cli__.production
 					if (__cli__.forever)
@@ -714,9 +721,9 @@ main = (callback) ->
 						server = __cp__.spawn('forever', ['start', '-c', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
 					else
 						server = __cp__.spawn(appToLaunch, [fileToLaunch], {stdio: 'inherit', env: childEnv})
-				server.on('exit', () ->
-					callback()
-				)
+			server.on('exit', () ->
+				callback()
+			)
 		])
 
 	else if __cli__.eliminate
