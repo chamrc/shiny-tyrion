@@ -677,7 +677,10 @@ main = (callback) ->
 
 		, (callback) ->
 			if (__cli__.production) then callback()
-			process.on( 'SIGINT', () ->
+			process.on('SIGINT', () ->
+				process.exit()
+			)
+			process.on('exit', () ->
 				unbake()			
 				process.exit()
 			)
