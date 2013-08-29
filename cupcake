@@ -277,8 +277,6 @@ testClient = (callback) ->
 		cmd = 'karma start "' + fileurl + '" '
 		cmd += '--single-run --no-auto-watch' if !__cli__.multiruns
 
-		console.log(cmd)
-
 		run(cmd, (err, code, signal) ->
 			exitCode = code if code && !err
 			callback()
@@ -357,7 +355,7 @@ clientCov = (callback) ->
 		msg = 'Running code coverage for client @ "' + fileurl + '"\n'
 		console.log(msg.green)
 		cmd = 'karma start "' + fileurl + '" '
-		cmd += 'no-single-run  --auto-watch' if __cli__.multiruns
+		cmd += '--single-run --no-auto-watch' if !__cli__.multiruns
 
 		run(cmd, (err, code, signal) ->
 			exitCode = code if code && !err
