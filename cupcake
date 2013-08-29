@@ -609,20 +609,22 @@ if !__fs__.existsSync('./package.json')
 __cli__
 	.version(version)
 	.usage(usage)
-	.option("-h, --halt", "Stop all running scripts of " + 'forever'.red + ".")
-	.option("-B, --build", "Compile and " + "minify".cyan + " stylesheet & javascript for production.")
-	.option("-b, --devBuild", "Compile and " + "minify".cyan + " stylesheet & javascript for development.")
+	.option("-h, --halt", "Stop all running scripts of " + 'forever'.green + ".\n\n" + "Helper\n".red)
 	.option("-e, --eliminate", "Eliminate all .d.ts .js .js.map for each .ts file in public/core and public/modules.")
 	.option("-u, --update", "Manually update IcyCupCake.")
-	.option("-S, --skip", "Skip automatic update for IcyCupCake.\n")
-	.option("-w, --watch", "Watch".green + " all typescript files in public folder.\n")
+	.option("-S, --skip", "Skip automatic update for IcyCupCake.")
+	.option("-r, --remove", "Remove all temporary files & folders.")
+	.option("-w, --watch", "Watch".red + " all typescript files in public folder.\n\n" + "Build\n".yellow)
+	.option("-B, --build", "Compile and " + "minify".cyan + " stylesheet & javascript for production.")
+	.option("-b, --devBuild", "Compile and " + "minify".cyan + " stylesheet & javascript for development.\n\n" + "Test & Coverage\n".green)
 	.option("-t, --test [config]", "Unit " + "test".bold.inverse + " project using Mocha", configinput)
-	.option("-C, --coverage [config]", "Generate " + "test coverage report".underline.magenta + " using Mocha", configinput)
-	.option("-T, --target [target]", "Unit test " + "target".cyan + " (s: server, c: client, default to both.)\n", targetinput)
-	.option("-r, --remove", "Remove all temporary files & folders.\n")
-	.option("-s, --start [file]", "Start server using node [optional file] (default to development mode)\n\nStart options:\n", fileinput)
+	.option("-C, --coverage [config]", "Generate " + "test coverage report".underline.magenta + " using Mocha\n\n" + "Start\n".cyan, configinput)
+	.option("-s, --start [file]", "Start server using node [optional file] (default to development mode)" + "\n\nTest options:\n".blue, fileinput)
+	.option("-T, --target [target]", "Unit test " + "target".green + " (s: server, c: client, default to both.)", targetinput)
+	.option("-m, --multiruns", "Disable single run for client tests using karma (option of --test & --coverage)" + "\n\nStart options:\n".magenta, portinput)
 	.option("-p, --production [port]", "Start server in " + "deployment".rainbow.bold.italic.underline + " mode. [optional port #, default: 80] (option of --start)", portinput)
 	.option("-x, --nginx", "Start server in production with " + "nginx".bold.inverse + ". (static files are served by Nginx, ignored if not in production, option of --start)\n")
+	.option("-d, --debug", "Debug".cyan + " server using CLI.  (option of --start, not compatible with nodemon / forever)")
 	.option("-n, --nodemon", "Start server with " + 'nodemon'.green + " instead of " + 'node'.yellow + ".  (option of --start)")
 	.option("-f, --forever", "Start server with " + 'forever'.red + ".  (option of --start)\n")
 	.option("-c, --cluster", "Start server using " + 'cluster.js'.yellow + ".  (option of --start)")
@@ -637,6 +639,14 @@ __cli__
 main = (callback) ->
 	if __cli__.start
 		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild)
+
+		if (__cli__.debug && (__cli__.nodemon || __cli__.forever))
+			console.log('Debug is not compatible with nodemon or forever.'.red)
+			return
+
+		if (__cli__.debug && (__cli__.production || __cli__.nginx))
+			console.log('Debug should not be ran in production environment.'.red)
+			return
 
 		__async__.series([(callback) ->
 			install = __cp__.spawn("npm", ['install'], {stdio: 'inherit'}).on('exit', () ->
@@ -690,19 +700,23 @@ main = (callback) ->
 			childEnv.NODE_ENV = envToLaunch
 			childEnv.PORT = portToLaunch if (portToLaunch)
 
-			if __cli__.production
-				if (__cli__.forever)
-					server = __cp__.spawn('/usr/bin/sudo', ['-E', 'forever', 'start', '-c', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
-				else
-					server = __cp__.spawn('/usr/bin/sudo', ['-E', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
+			if __cli__.debug
+				cmd = 'node debug ' + fileToLaunch
+				run(cmd, callback)
 			else
-				if (__cli__.forever)
-					server = __cp__.spawn('forever', ['start', '-c', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
+				if __cli__.production
+					if (__cli__.forever)
+						server = __cp__.spawn('/usr/bin/sudo', ['-E', 'forever', 'start', '-c', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
+					else
+						server = __cp__.spawn('/usr/bin/sudo', ['-E', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
 				else
-					server = __cp__.spawn(appToLaunch, [fileToLaunch], {stdio: 'inherit', env: childEnv})
-			server.on('exit', () ->
-				callback()
-			)
+					if (__cli__.forever)
+						server = __cp__.spawn('forever', ['start', '-c', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
+					else
+						server = __cp__.spawn(appToLaunch, [fileToLaunch], {stdio: 'inherit', env: childEnv})
+				server.on('exit', () ->
+					callback()
+				)
 		])
 
 	else if __cli__.eliminate
