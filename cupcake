@@ -160,11 +160,13 @@ testServer = (callback) ->
 	fileurl = if config && target < 1 then config else 'tests/server'
 	msg = 'Testing server @ "' + fileurl + '"\n'
 	console.log(msg.green)
+	
 	childEnv = process.env
 	childEnv.NODE_ENV = 'test'
-	cmd = 'mocha --recursive -R spec ' + fileurl
-	run(cmd, (err, code, signal) ->
-		callback(err, code) if callback
+
+	server = __cp__.spawn('mocha', ['--recursive', '-R', 'spec', fileurl], {env: childEnv, stdio: 'inherit'})
+	server.on('close', (code, signal)  ->
+		callback(null, code, signal)
 	)
 
 # Client Test
