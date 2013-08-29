@@ -354,7 +354,7 @@ clientCov = (callback) ->
 			cmd =  'utilities/hooks/post-test.sh'
 			run(cmd, () ->
 				process.exit()
-			)
+			, true)
 		)
 
 		cmd =  'utilities/hooks/pre-test.sh'
