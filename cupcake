@@ -27,6 +27,7 @@ file = null
 port = null
 test = null
 config = null
+browser = null
 target = 1 # 0: server, 1: all & 2: client
 opencmd = if (process.platform != 'darwin') then 'xdg-open' else 'open'
 
@@ -46,6 +47,9 @@ targetinput = (val) ->
 
 configinput = (val) ->
 	config = val
+
+browserinput = (val) ->
+	browser = val
 
 #-------------------------------------------------------------------------------------
 # Helper
@@ -160,7 +164,7 @@ testServer = (callback) ->
 	fileurl = if config && target < 1 then config else 'tests/server'
 	msg = 'Testing server @ "' + fileurl + '"\n'
 	console.log(msg.green)
-	
+
 	childEnv = process.env
 	childEnv.NODE_ENV = 'test'
 
@@ -266,7 +270,7 @@ testClient = (callback) ->
 			cmd =  'utilities/hooks/post-test.sh'
 			run(cmd, () ->
 				process.exit()
-			)
+			, true)
 		)
 
 		cmd =  'utilities/hooks/pre-test.sh'
@@ -277,7 +281,10 @@ testClient = (callback) ->
 		console.log(msg.green)
 
 		cmd = 'karma start "' + fileurl + '" '
-		cmd += '--single-run --no-auto-watch' if !__cli__.multiruns
+		if !__cli__.multiruns
+			cmd += '--single-run --no-auto-watch ' 
+		if __cli__.inBrowser && browser
+			cmd += '--browsers ' + browser 
 
 		run(cmd, (err, code, signal) ->
 			exitCode = code if code && !err
@@ -357,7 +364,11 @@ clientCov = (callback) ->
 		msg = 'Running code coverage for client @ "' + fileurl + '"\n'
 		console.log(msg.green)
 		cmd = 'karma start "' + fileurl + '" '
-		cmd += '--single-run --no-auto-watch' if !__cli__.multiruns
+
+		if !__cli__.multiruns
+			cmd += '--single-run --no-auto-watch ' 
+		if __cli__.inBrowser && browser
+			cmd += '--browsers ' + browser
 
 		run(cmd, (err, code, signal) ->
 			exitCode = code if code && !err
@@ -628,6 +639,7 @@ __cli__
 	.option("-C, --coverage [config]", "Generate " + "test coverage report".underline.magenta + " using Mocha\n\n" + "Start\n".cyan, configinput)
 	.option("-s, --start [file]", "Start server using node [optional file] (default to development mode)" + "\n\nTest options:\n".blue, fileinput)
 	.option("-T, --target [target]", "Unit test " + "target".green + " (s: server, c: client, default to both.)", targetinput)
+	.option("-I, --inBrowser [browser]", "Run frontend test in [browser]", browserinput)
 	.option("-m, --multiruns", "Disable single run for client tests using karma (option of --test & --coverage)" + "\n\nStart options:\n".magenta, portinput)
 	.option("-p, --production [port]", "Start server in " + "deployment".rainbow.bold.italic.underline + " mode. [optional port #, default: 80] (option of --start)", portinput)
 	.option("-x, --nginx", "Start server in production with " + "nginx".bold.inverse + ". (static files are served by Nginx, ignored if not in production, option of --start)\n")
