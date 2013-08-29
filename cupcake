@@ -366,9 +366,8 @@ clientCov = (callback) ->
 	, (callback) ->
 		console.log('Stopping server'.green)
 		cmd =  'utilities/hooks/post-test.sh'
-		run(cmd, callback)
+		run(cmd, callback, true)
 	], (err, results) ->
-		console.log('Coverage report is located inside coverage folder.'.green) if !err
 		callback(null, exitCode) if callback
 	)
 
