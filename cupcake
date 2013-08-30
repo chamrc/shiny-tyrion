@@ -342,7 +342,7 @@ serverCov = (callback) ->
 		cmd = 'mkdir -p coverage/server && NODE_ENV=coverage mocha --recursive "' + fileurl + '" -R json-cov > coverage/server/index.json' 
 		run(cmd, callback)
 	, (callback) ->
-		cmd = 'cat coverage/server/index.json | json2htmlcov > coverage/server/index.html'
+		cmd = 'json2html "coverage/server/index.json" "coverage/server/index.html"'
 		run(cmd, () ->
 			run(opencmd + ' coverage/server/index.html', callback)
 		)
