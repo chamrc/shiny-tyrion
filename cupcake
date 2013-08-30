@@ -335,12 +335,19 @@ postCov = (callback) ->
 	rmJSCov(callback)
 
 serverCov = (callback) ->
-	fileurl = if config && target < 1 then config else 'tests/server'
-	msg = 'Running code coverage for server @ "' + fileurl + '"\n'
-	console.log(msg.green)
-	cmd = 'mkdir -p coverage/server && NODE_ENV=coverage mocha --recursive "' + fileurl + '" -R html-cov > coverage/server/index.html' 
-	run(cmd, () ->
-		run(opencmd + ' coverage/server/index.html', callback)
+	__async__.series([(callback) ->
+		fileurl = if config && target < 1 then config else 'tests/server'
+		msg = 'Running code coverage for server @ "' + fileurl + '"\n'
+		console.log(msg.green)
+		cmd = 'mkdir -p coverage/server && NODE_ENV=coverage mocha --recursive "' + fileurl + '" -R json-cov > coverage/server/index.json' 
+		run(cmd, callback)
+	, (callback) ->
+		cmd = 'cat coverage/server/index.json | json2htmlcov > coverage/server/index.html'
+		run(cmd, () ->
+			run(opencmd + ' coverage/server/index.html', callback)
+		)
+	], (err, results) ->
+		callback() if callback
 	)
 
 clientCov = (callback) ->
@@ -627,10 +634,10 @@ if !__fs__.existsSync('./package.json')
 __cli__
 	.version(version)
 	.usage(usage)
-	.option("-h, --halt", "Stop all running scripts of " + 'forever'.green + ".\n\n" + "Helper\n".red)
+	.option("-S, --skip", "Skip".magenta + " automatic update for IcyCupCake. (option of all commands)\n\n" + "Helper\n".red)
+	.option("-h, --halt", "Stop all running scripts of " + 'forever'.green + ".")
 	.option("-e, --eliminate", "Eliminate all .d.ts .js .js.map for each .ts file in public/core and public/modules.")
 	.option("-u, --update", "Manually update IcyCupCake.")
-	.option("-S, --skip", "Skip automatic update for IcyCupCake.")
 	.option("-r, --remove", "Remove all temporary files & folders.")
 	.option("-w, --watch", "Watch".red + " all typescript files in public folder.\n\n" + "Build\n".yellow)
 	.option("-B, --build", "Compile and " + "minify".cyan + " stylesheet & javascript for production.")
@@ -644,7 +651,7 @@ __cli__
 	.option("-p, --production [port]", "Start server in " + "deployment".rainbow.bold.italic.underline + " mode. [optional port #, default: 80] (option of --start)", portinput)
 	.option("-x, --nginx", "Start server in production with " + "nginx".bold.inverse + ". (static files are served by Nginx, ignored if not in production, option of --start)\n")
 	.option("-d, --debug", "Debug".cyan + " server using CLI.  (option of --start, not compatible with nodemon / forever)")
-	.option("-n, --nodemon", "Start server with " + 'nodemon'.green + " instead of " + 'node'.yellow + ".  (option of --start)")
+	.option("-n, --nodemon", "Start server with " + 'nodemon'.green + " (" + "supervisor".cyan + " in ubuntu) instead of " + 'node'.yellow + ".  (option of --start)")
 	.option("-f, --forever", "Start server with " + 'forever'.red + ".  (option of --start)\n")
 	.option("-c, --cluster", "Start server using " + 'cluster.js'.yellow + ".  (option of --start)")
 	.option("-i, --instance", "Start server using " + 'instance.js'.yellow + ".  (option of --start)")
@@ -688,7 +695,7 @@ main = (callback) ->
 
 		, (callback) ->
 			appToLaunch = if __cli__.nodemon then (if process.platform != 'darwin' then 'supervisor' else 'nodemon') else 'node'
-			envToLaunch = if __cli__.production then (if __cli__.nginx then "nginx" else "production") else "development"
+			envToLaunch = if __cli__.nginx then 'nginx' else (if __cli__.production then "production" else "development")
 			portToLaunch = null
 			fileToLaunch = null
 
