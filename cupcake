@@ -28,7 +28,7 @@ port = null
 test = null
 config = null
 browser = null
-target = 1 # 0: server, 1: all & 2: client
+target = 1 # 0: server, 1: all, 2: karma, 3: selenium
 opencmd = if (process.platform != 'darwin') then 'xdg-open' else 'open'
 
 #-------------------------------------------------------------------------------------
@@ -43,7 +43,7 @@ portinput = (val) ->
 	port = val
 
 targetinput = (val) ->
-	target = if val == 's' then 0 else (if val == 'c' then 2 else 1)
+	target = if val == 'S' then 3 else (if val == 's' then 0 else (if val == 'c' then 2 else 1))
 
 configinput = (val) ->
 	config = val
@@ -126,7 +126,9 @@ link = (callback) ->
 		console.log('Symbolic linking all test files to ./tests.'.green)
 		linkdir('app', "tests", 's/^app\\\/tests/tests\\\/server/', callback)
 	, (callback) ->
-		linkdir('public', "tests", 's/^public/tests\\\/client/;s/\\\/js\\\/tests//', callback)
+		linkdir('public', "karma", 's/^public/tests\\\/client\\\/karma/;s/\\\/js\\\/tests\\\/karma//;', callback)
+	, (callback) ->
+		linkdir('public', "selenium", 's/^public/tests\\\/client\\\/selenium/;s/\\\/js\\\/tests\\\/selenium//;', callback)
 	, (callback) ->
 		linkFilesInDir('public', 'src', 's|.*?\\\/js\/src\\\/|development\\\/js\\\/|', callback)
 	, (callback) ->
@@ -278,8 +280,26 @@ testClient = (callback) ->
 		cmd =  'utilities/hooks/pre-test.sh'
 		run(cmd, callback)
 	, (callback) ->
-		fileurl = if config && target > 1 then config else 'config/karma/all-test.conf.js'
-		msg = 'Testing client @ "' + fileurl + '"\n'
+		return callback() if target == 0 || target == 2
+
+		fileurl = if config && target == 2 then config else 'tests/client/selenium'
+		msg = 'Testing client @ "' + fileurl + '" using Selenium\n'
+		console.log(msg.green)
+
+		childEnv = process.env
+		childEnv.SELENIUM_BROWSER = 'chrome'
+		childEnv.NODE_ENV = 'test'
+		server = __cp__.spawn('mocha', ['--recursive', '-R', 'spec', fileurl], {env: childEnv, stdio: 'inherit'})
+		server.on('close', (code, signal)  ->
+			exitCode |= code if code && !err
+			callback()
+		)
+
+	, (callback) ->
+		return callback() if target == 0 || target == 3
+
+		fileurl = if config && target == 1 then config else 'config/karma/all-test.conf.js'
+		msg = 'Testing client @ "' + fileurl + '" using Karma\n'
 		console.log(msg.green)
 
 		cmd = 'karma start "' + fileurl + '" '
@@ -289,7 +309,7 @@ testClient = (callback) ->
 			cmd += '--browsers ' + browser 
 
 		run(cmd, (err, code, signal) ->
-			exitCode = code if code && !err
+			exitCode |= code if code && !err
 			callback()
 		)
 	, (callback) ->
@@ -659,7 +679,7 @@ if !__fs__.existsSync('./package.json')
 __cli__
 	.version(version)
 	.usage(usage)
-	.option("-S, --skip", "Skip".magenta + " automatic update for IcyCupCake. (option of all commands)\n\n" + "Helper\n".red)
+	.option("", "\nHelper\n".red)
 	.option("-h, --halt", "Stop all running scripts of " + 'forever'.green + ".")
 	.option("-e, --eliminate", "Eliminate all .d.ts .js .js.map for each .ts file in public/core and public/modules.")
 	.option("-u, --update", "Manually update IcyCupCake.")
@@ -682,6 +702,7 @@ __cli__
 	.option("-i, --instance", "Start server using " + 'instance.js'.yellow + ".  (option of --start)")
 	.option("-v, --server", "Start server using " + 'server.js'.yellow + ".  (option of --start)")
 	.option("-a, --app", "Start server using " + 'app.js'.yellow + ".  (option of --start)")
+	.parse(process.argv)
 
 #-------------------------------------------------------------------------------------
 # Main
