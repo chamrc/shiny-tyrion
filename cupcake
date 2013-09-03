@@ -91,15 +91,17 @@ exec = (cmd, callback, hideStdIO) ->
 		callback(ret) if callback
 	)
 
-checkForDevelopmentFolder = (callback) ->
+checkForDevelopmentFolder = (callback, skipCompile) ->
 	if (__cli__.production)
 		build(callback)
 	else 
 		if (!__fs__.existsSync('./development'))
 			devBuild(callback) 
-		else 
+		else if (!skipCompile)
 			cmd = 'grunt compileTs --force'
 			run(cmd, callback)
+		else
+			callback() if callback
 
 #-------------------------------------------------------------------------------------
 # Link & unlink
@@ -301,7 +303,10 @@ testClient = (callback) ->
 
 test = (callback) ->
 	__async__.series([(callback) ->
+		run('export NODE_ENV=test', callback)
+	, (callback) ->
 		if target >= 1 then checkForDevelopmentFolder(callback) else link(callback, 0)
+
 	, (callback) ->
 		if target <= 1 then testServer(callback) else callback(null, 0)
 	# , (callback) ->
@@ -313,6 +318,7 @@ test = (callback) ->
 		# 	callback()
 	, (callback) ->
 		if target >= 1 then testClient(callback) else callback(null, 0)
+		
 	], (err, results) ->
 		exitCode = results[1] | results[2]
 		process.exit(exitCode)
@@ -323,10 +329,10 @@ test = (callback) ->
 #-------------------------------------------------------------------------------------
 
 mkJsCov = (callback) ->
-	run('jscov app/src app/.src-cov', callback)
+	run('jscov app/src app/.src-cov && mv app/src app/.src-orig && mv app/.src-cov app/src', callback)
 
 rmJSCov = (callback) ->
-	run('rm -r app/.src-cov', callback)
+	run('rm -r app/src && mv app/.src-orig app/src', callback)
 
 preCov = (callback) ->
 	mkJsCov(callback)
@@ -336,6 +342,17 @@ postCov = (callback) ->
 
 serverCov = (callback) ->
 	__async__.series([(callback) ->
+		process.on( 'SIGINT', () ->
+			console.log('Stopping server'.red)
+			cmd =  'utilities/hooks/post-coverage.sh'
+			run(cmd, () ->
+				process.exit()
+			, true)
+		)
+
+		cmd = 'utilities/hooks/pre-coverage.sh'
+		run(cmd, callback)
+	, (callback) ->
 		fileurl = if config && target < 1 then config else 'tests/server'
 		msg = 'Running code coverage for server @ "' + fileurl + '"\n'
 		console.log(msg.green)
@@ -344,8 +361,15 @@ serverCov = (callback) ->
 	, (callback) ->
 		cmd = 'json2html "coverage/server/index.json" "coverage/server/index.html"'
 		run(cmd, () ->
-			run(opencmd + ' coverage/server/index.html', callback)
+			__async__.series([(callback) ->
+				postCov(callback)
+			], (err, results) ->
+				run(opencmd + ' coverage/server/index.html', callback)
+			)
 		)
+	, (callback) ->
+		cmd =  'utilities/hooks/post-coverage.sh'
+		run(cmd, callback, true)
 	], (err, results) ->
 		callback() if callback
 	)
@@ -354,8 +378,9 @@ clientCov = (callback) ->
 	exitCode = 0
 	__async__.series([(callback) ->
 		testBuild(callback)
+		
 	, (callback) ->
-		console.log('Starting server @ localhost:3000'.green)
+		console.log('Starting server @ localhost:3000 for coverage'.green)
 		process.on( 'SIGINT', () ->
 			console.log('Stopping server'.red)
 			cmd =  'utilities/hooks/post-test.sh'
@@ -364,7 +389,7 @@ clientCov = (callback) ->
 			, true)
 		)
 
-		cmd =  'utilities/hooks/pre-test.sh'
+		cmd = 'utilities/hooks/pre-test.sh'
 		run(cmd, callback)
 	, (callback) ->
 		fileurl = if config && target > 1 then config else 'config/karma/all-cov.conf.js'
@@ -395,12 +420,12 @@ cov = (callback) ->
 		preCov(callback)
 	, (callback) ->
 		if target >= 1 then checkForDevelopmentFolder(callback) else link(callback)
+
 	, (callback) ->
 		if target <= 1 then serverCov(callback) else callback()
 	, (callback) ->
 		if target >= 1 then clientCov(callback) else callback()
-	, (callback) ->
-		postCov(callback)
+	
 	], (err, results) ->
 		if !err
 			console.log('Coverage report is located inside coverage folder.'.green)
@@ -657,7 +682,6 @@ __cli__
 	.option("-i, --instance", "Start server using " + 'instance.js'.yellow + ".  (option of --start)")
 	.option("-v, --server", "Start server using " + 'server.js'.yellow + ".  (option of --start)")
 	.option("-a, --app", "Start server using " + 'app.js'.yellow + ".  (option of --start)")
-	.parse(process.argv)
 
 #-------------------------------------------------------------------------------------
 # Main
@@ -680,7 +704,10 @@ main = (callback) ->
 			)
 
 		, (callback) ->
-			if (__cli__.production) then build(callback) else bake(callback)
+			checkForDevelopmentFolder(callback, true)
+
+		, (callback) ->
+			if (__cli__.production) then callback() else bake(callback)
 
 		, (callback) ->
 			if (__cli__.production) then callback()
