@@ -19,8 +19,8 @@ __fs__ = require('fs')
 
 version = require('./package.json').version
 
-usage  = "-s [-n -p -f -c -i] | -t [<config> -T <target>] | -C [<config> -T <target>] | -h | -w\n\t ".green + "icc " + "-s [-n -p -f -c -i] | -t [<config> -T <target>] | -C [<config> -T <target>] | -h | -w\n\n  ".green
-usage += 'Note: ' + 'By default (if no option/file specified), cupcake search for file to run\n\tin the following order:\n\t '
+usage  = "-s [-n -p -f -c -i] | -t [<config> -T <target>] | -C [<config> -T <target>] | -h | -w\n\t ".green + "ccc " + "-s [-n -p -f -c -i] | -t [<config> -T <target>] | -C [<config> -T <target>] | -h | -w\n\n  ".green
+usage += 'Note: ' + 'By default (if no option/file specified), chococupcake search for file to run\n\tin the following order:\n\t '
 usage += 'cluster.js -> instance.js -> server.js -> app.js'.underline.yellow
 
 file = null
@@ -113,6 +113,12 @@ linkdir = (indir, name, sed, callback) ->
 	cmd = "find " + indir + " -name '" + name + "' -type d | while read infile; do outfile=`echo $infile | sed '" + sed + "'`; outdir=`dirname \"$outfile\"`; mkdir -p \"$outdir\"; ln -s \"$PWD/$infile\" \"$PWD/$outfile\"; done"
 	run(cmd, callback)
 
+cpdir = (indir, name, sed, callback) ->
+	msg = "\tCopying directory matching name " + name + " in " + indir + " using RegExp \"" + sed + '"'
+	console.log(msg.green)
+	cmd = "find " + indir + " -name '" + name + "' -type d | while read infile; do outfile=`echo $infile | sed '" + sed + "'`; outdir=`dirname \"$outfile\"`; mkdir -p \"$outdir\"; cp -r \"$PWD/$infile\" \"$PWD/$outfile\"; done"
+	run(cmd, callback)
+
 linkFilesInDir = (indir, name, sed, callback) ->
 	msg = "\tLinking files in directory matching name " + name + " in " + indir + " using RegExp \"" + sed + '"'
 	console.log(msg.green)
@@ -129,19 +135,18 @@ link = (callback) ->
 		linkdir('public', "karma", 's/^public/tests\\\/client\\\/karma/;s/\\\/js\\\/tests\\\/karma//;', callback)
 	, (callback) ->
 		linkdir('public', "selenium", 's/^public/tests\\\/client\\\/selenium/;s/\\\/js\\\/tests\\\/selenium//;', callback)
+	# , (callback) ->
+	# 	linkFilesInDir('public', 'definitions', 's|public\\\/definitions\\\/|development\\\/js\\\/|', callback)
 	, (callback) ->
-		linkFilesInDir('public', 'src', 's|.*?\\\/js\/src\\\/|development\\\/js\\\/|', callback)
+		linkFilesInDir('public', 'src', 's|public\\\/js\\\/src\\\/|development\\\/js\\\/|', callback)
 	, (callback) ->
 		linkFilesInDir('public', 'html', 's|^.*?\\\/html\\\/|development\\\/html\\\/|', callback) 
 	, (callback) ->
 		linkFilesInDir('public', 'img', 's|^.*?\\\/img\\\/|development\\\/img\\\/|', callback)	
 	, (callback) ->
-		linkFilesInDir('public', 'locales', 's|^.*?\\\/locales\\\/|development\\\/locales\\\/|', callback)	
+		linkFilesInDir('public', 'locales', 's|^.*?\\\/locales\\\/|development\\\/locales\\\/|', callback)
 	, (callback) ->
-		console.log('\tLinking less files to development folder.'.green)
-		#cmd = "mkdir development/css && find public -name 'main.less' | while read infile; do outfile=`echo \"$infile\" | sed 's/^public\\\/modules/development\\\/css/;s/^public/development\\\/css/;s/\\\/css\\\/main.less/.less/'`; ln -s \"$PWD/$infile\" \"$PWD/$outfile\"; done"
-		cmd = "mkdir -p development/css && find public/core public/modules -name 'css' -type d | while read infile; do outfile=`echo \"$infile\" | sed 's/\\\/css//;s/^public/development\\\/css/;s/modules\\\///'`; ln -s \"$PWD/$infile\" \"$PWD/$outfile\"; done"
-		run(cmd, callback)
+		linkFilesInDir('public', 'css', 's|public\\\/|development\\\/|', callback)
 	, (callback) ->
 		unlinkdir('app public', callback)
 	, (callback) ->
@@ -155,8 +160,8 @@ unlinkdir = (dir, callback) ->
 	run(cmd, callback, true)
 
 unlink = (callback) ->
-	console.log('Deleting libpeerconnection.log tests development .tmp coverage & production folders.'.green)
-	cmd = 'rm -r ./tests ./libpeerconnection.log ./.tmp ./development ./coverage ./production'
+	console.log('Deleting libpeerconnection.log tests development .tmp coverage documentations & production folders.'.green)
+	cmd = 'rm -r ./tests ./libpeerconnection.log ./.tmp ./development ./coverage ./production ./documentations'
 	run(cmd, callback, true)
 
 #-------------------------------------------------------------------------------------
@@ -174,7 +179,7 @@ testServer = (callback) ->
 
 	server = __cp__.spawn('mocha', ['--recursive', '-R', 'spec', fileurl], {env: childEnv, stdio: 'inherit'})
 	server.on('close', (code, signal)  ->
-		callback(null, code, signal)
+		callback(null, code)
 	)
 
 # Client Test
@@ -190,7 +195,7 @@ writeHeadForTests = (out, $, callback) ->
 	for style in $('head link')
 		if (!style || !style.attribs || !style.attribs.href) then continue else src = style.attribs.href
 		src = src.replace('/static', '/development') if (src.indexOf('http') == -1) 
-		src = src.replace('/main.less', '.css').replace('/development', '/tests/client/.tmp') if (style.attribs.rel && style.attribs.rel == 'stylesheet/less')
+		src = src.replace('/main.less', '/test.css').replace('/development', '/tests/client/.tmp') if (style.attribs.rel && style.attribs.rel == 'stylesheet/less')
 		styles.push(src)
 
 	for script in $('head script')
@@ -282,23 +287,23 @@ testClient = (callback) ->
 	, (callback) ->
 		return callback() if target == 0 || target == 2
 
-		fileurl = if config && target == 2 then config else 'tests/client/selenium'
+		fileurl = if config && target == 3 then config else 'tests/client/selenium'
 		msg = 'Testing client @ "' + fileurl + '" using Selenium\n'
 		console.log(msg.green)
 
 		childEnv = process.env
-		childEnv.SELENIUM_BROWSER = 'chrome'
 		childEnv.NODE_ENV = 'test'
-		server = __cp__.spawn('mocha', ['--recursive', '-R', 'spec', fileurl], {env: childEnv, stdio: 'inherit'})
+
+		server = __cp__.spawn('parallel_rspec', [fileurl], {env: childEnv, stdio: 'inherit'})
 		server.on('close', (code, signal)  ->
-			exitCode |= code if code && !err
+			exitCode |= code if code
 			callback()
 		)
 
 	, (callback) ->
 		return callback() if target == 0 || target == 3
 
-		fileurl = if config && target == 1 then config else 'config/karma/all-test.conf.js'
+		fileurl = if config && target == 2 then config else 'config/karma/all-test.conf.js'
 		msg = 'Testing client @ "' + fileurl + '" using Karma\n'
 		console.log(msg.green)
 
@@ -340,7 +345,7 @@ test = (callback) ->
 		if target >= 1 then testClient(callback) else callback(null, 0)
 		
 	], (err, results) ->
-		exitCode = results[1] | results[2]
+		exitCode = results[2] | results[3]
 		process.exit(exitCode)
 	)
 
@@ -349,10 +354,19 @@ test = (callback) ->
 #-------------------------------------------------------------------------------------
 
 mkJsCov = (callback) ->
-	run('jscov app/src app/.src-cov && mv app/src app/.src-orig && mv app/.src-cov app/src', callback)
+	if (target <= 1)	
+		console.log("Please don't stop the process until it's over.".red)
+		console.log("Otherwise, you might need to run the following line manually.".yellow)
+		console.log("\tif [ -e \"app/.src-orig\" ]; then rm -r app/src && mv app/.src-orig app/src; fi".yellow)
+		run('jscov app/src app/.src-cov && mv app/src app/.src-orig && mv app/.src-cov app/src', callback)
+	else
+		callback()
 
 rmJSCov = (callback) ->
-	run('rm -r app/src && mv app/.src-orig app/src', callback)
+	if (target <= 1)
+		run('rm -r app/src && mv app/.src-orig app/src', callback)
+	else
+		callback()
 
 preCov = (callback) ->
 	mkJsCov(callback)
@@ -435,6 +449,11 @@ clientCov = (callback) ->
 	)
 
 cov = (callback) ->
+	if (target == 3)
+		console.log('Coverage report is not supported by Selenium. Exiting...'.red)
+		callback() if callback
+		return
+
 	__async__.series([(callback) ->
 		console.log('Please make sure Mocha pass all the tests before running coverage.'.yellow)
 		preCov(callback)
@@ -475,7 +494,7 @@ clearTmp = (callback) ->
 buildCss = (callback) ->
 	console.log('Minifing .less files.'.green)
 	__async__.series([(callback) ->
-		cmd = "mkdir -p .tmp/css && find . -name 'main.less' | while read infile; do outfile=`echo \"$infile\" | sed 's/\\\/css\\\/main.less/.css/;s/^.\\\/public\\\/modules/.\\\/.tmp\\\/css/;s/.\\\/public/.\\\/.tmp\\\/css/'`; lessc \"$infile\" \"$outfile\" -x -yui-compress; done"
+		cmd = "mkdir -p .tmp/css && lessc -x -yui-compress \"$PWD/public/css/main.less\" \"$PWD/.tmp/css/main.css\""
 		run(cmd, callback)
 	, (callback) ->
 		cmd = 'grunt minifyCss'
@@ -489,13 +508,19 @@ buildJs = (callback) ->
 	__async__.series([(callback) ->
 		# cmd = "mkdir -p .tmp/js && find public -name 'src' | while read src; do outfile=`echo \"$src\" | sed 's/\\\/js\\\/src/.js/;s/^public\\\/modules/.tmp\\\/js/;s/^public/.tmp\\\/js/'`; find \"$src\" -name '*.ts' -not -name '*.d.ts' -type f | xargs tsc --out \"$outfile\" --target ES5; done"
 		# run(cmd, callback)
-		cmd = "mkdir -p .tmp/js && find public -name '*.ts' -not -name '*.d.ts' -type f  | xargs tsc --out \".tmp/js/scripts.js\" --target ES5;"
+		cmd = "mkdir -p .tmp/js && find public -name '*.ts' -not -name '*.d.ts' -type f  | xargs tsc --out \".tmp/js/scripts.js\" --target ES5 --removeComments --module amd;"
 		run(cmd, callback)
 	, (callback) ->
 		cmd = "find public -name 'src' -type d | while read indir;do find \"$indir\" -name '*.js' -type f | while read infile; do outfile=`echo \"$infile\" | perl -pe 's/^public\\\/modules\\\/.*?\\\//.tmp\\\//;s/^public\\\/core/.tmp/;s/\\\/src\\\//\\\//';`; outdir=`dirname \"$outfile\"`; mkdir -p \"$outdir\" && cp \"$infile\" \"$outfile\"; done; done"
 		run(cmd, callback)
 	, (callback) ->
 		cmd = 'grunt minifyJs'
+		run(cmd, callback)
+	, (callback) ->
+		cmd = 'rm production/js/scripts.js'
+		run(cmd, callback)
+	, (callback) ->
+		cmd = "find .tmp/js -name '*.txt' | while read infile; do cat \"$infile\"; done"
 		run(cmd, callback)
 	], (err, results) ->
 		callback() if callback
@@ -509,7 +534,7 @@ buildHtml = (callback) ->
 buildJson = (callback) ->
 	console.log('Minifing .json files.'.green)
 	__async__.series([(callback) ->
-		cmd = "find public -name '*.json' | while read infile; do outfile=`echo \"$infile\" | perl -pe 's|^public\/modules\/.*?\/|production\/|;s|^public\/core|production|'`; outdir=`dirname \"$outfile\"`; mkdir -p \"$PWD/$outdir\" && cp \"$PWD/$infile\" \"$PWD/$outfile\"; done"
+		cmd = "find public -name '*.json' | while read infile; do outfile=`echo \"$infile\" | perl -pe 's|^public\\\/|production\\\/|'`; outdir=`dirname \"$outfile\"`; mkdir -p \"$PWD/$outdir\" && cp \"$PWD/$infile\" \"$PWD/$outfile\"; done"
 		run(cmd, callback)
 	, (callback) ->
 		cmd = 'grunt minifyJson'
@@ -519,7 +544,15 @@ buildJson = (callback) ->
 	)
 
 copyLibraries = (env, callback) ->
-	copyAsset('public/libraries', 's|^public\\\/libraries\\\/.*?\\\/|' + env + '\\\/|', callback)
+	__async__.series([(callback) ->
+		copyAsset('public/libraries', 's|^public\\\/libraries\\\/.*?\\\/|' + env + '\\\/|', callback)
+	, (callback) ->
+		if (env != 'production') then return callback()
+		cmd = "find production/js -name '*.js' -not -name '*.min.js' -type f -print0 | xargs -0 rm"
+		run(cmd, callback)
+	], (err, results) ->
+		callback() if callback
+	)
 
 copyImages = (callback) ->
 	cmd = "mkdir -p production/img && find public -name 'img' -type d | while read indir; do find \"$indir\" -type f | while read infile; do cp \"$infile\" \"production/img\"; done; done"
@@ -574,7 +607,7 @@ devBuild = (callback) ->
 testBuild = (callback) ->
 	__async__.series([(callback) ->
 		console.log('Compiling LESS files from public/**/main.less to tests/client/.tmp/css'.green)
-		cmd = "find . -name 'main.less' | while read infile; do outfile=`echo \"$infile\" | sed 's/\\\/css\\\/main.less/.css/;s/^.\\\/public\\\/modules/.\\\/tests\\\/client\\\/.tmp\\\/css/;s/.\\\/public/.\\\/tests\\\/client\\\/.tmp\\\/css/'`; lessc \"$infile\" \"$outfile\"; done"
+		cmd = "lessc \"public/css/main.less\" \"tests/client/.tmp/css/test.css\""
 		run(cmd, callback)
 	, (callback) ->
 		console.log('Generating HTML files from views/**/*.jade to tests/client/.tmp/html'.green)
@@ -597,15 +630,35 @@ testBuild = (callback) ->
 #-------------------------------------------------------------------------------------
 
 bake = (callback) ->
-	console.log('\nStarting mongodb and typescript watcher\n'.green)
-	cmd =  'utilities/hooks/pre-dev.sh'
-	run(cmd, callback)
+	if (__cli__.debugBrowser)
+		if file
+			fileToLaunch = file
+		else if __cli__.cluster || __cli__.instance || __cli__.server || __cli__.app
+			fileToLaunch = if __cli__.cluster then 'cluster.js' else if __cli__.instance then 'instance.js' else if __cli__.server then 'server.js' else 'app.js'
+		else
+			fileToLaunch = 'app.js' if __fs__.existsSync 'app.js'
+			fileToLaunch = 'server.js' if __fs__.existsSync 'server.js'
+			fileToLaunch = 'instance.js' if __fs__.existsSync 'instance.js'
+			fileToLaunch = 'cluster.js' if __fs__.existsSync 'cluster.js'
+		console.log('\nStarting mongodb, redis and typescript watcher.\nLaunching server in remote debug mode using nodemon.\n'.green)
+		cmd =  'utilities/hooks/pre-debug-browser.sh ' + fileToLaunch
+		console.log(cmd)
+		run(cmd, callback)
+	else
+		console.log('\nStarting mongodb, redis and typescript watcher\n'.green)
+		cmd =  'utilities/hooks/pre-dev.sh'
+		run(cmd, callback)
 
 unbake = (callback) ->
 	__async__.series([(callback) ->
-		console.log('\nStopping mongodb and typescript watcher\n'.green)
-		cmd =  'utilities/hooks/post-dev.sh'
-		run(cmd, callback)
+		if (__cli__.debugBrowser)
+			console.log('\nKilling server.\nStopping mongodb and typescript watcher\n'.green)
+			cmd =  'utilities/hooks/post-debug-browser.sh'
+			run(cmd, callback)
+		else
+			console.log('\nStopping mongodb and typescript watcher\n'.green)
+			cmd =  'utilities/hooks/post-dev.sh'
+			run(cmd, callback)
 	], (err, results) ->
 		callback() if callback
 	)
@@ -638,9 +691,9 @@ eliminate = (callback) ->
 
 update = (callback) ->
 	__async__.waterfall([(callback) ->
-		process.stdout.write('Checking icycupcake version ... '.green)
+		process.stdout.write('Checking chococupcake version ... '.green)
 
-		cmd = 'npm show icycupcake version'
+		cmd = 'npm show chococupcake version'
 		exec(cmd, (data) ->
 			data = data.replace(/\s+/g, '');
 			callback(null, data == version)
@@ -651,11 +704,11 @@ update = (callback) ->
 			console.log('Already at latest version'.green)
 			callback()
 		else
-			console.log('Updating icycupcake'.green)
+			console.log('Updating chococupcake'.green)
 			if (process.platform != 'darwin') # Ubuntu
-				cmd = 'sudo npm i -g icycupcake'
+				cmd = 'sudo npm i -g chococupcake'
 			else
-				cmd = 'npm i -g icycupcake'
+				cmd = 'npm i -g chococupcake'
 			run(cmd, () ->
 				console.log('Please rerun your previous script command.'.green) if (!__cli__.update)
 				process.kill()
@@ -680,22 +733,28 @@ __cli__
 	.version(version)
 	.usage(usage)
 	.option("", "\nHelper\n".red)
+	.option("-u, --update", "Manually update chocoCupCake.")
+	.option("-S, --skip", "Skip auto update of chocoCupCake.")
+	.option("-l, --link", 'Link'.yellow + " files.")
 	.option("-h, --halt", "Stop all running scripts of " + 'forever'.green + ".")
 	.option("-e, --eliminate", "Eliminate all .d.ts .js .js.map for each .ts file in public/core and public/modules.")
-	.option("-u, --update", "Manually update IcyCupCake.")
+	.option("-u, --update", "Manually update chocoCupCake.")
 	.option("-r, --remove", "Remove all temporary files & folders.")
+	.option("-y, --yui", "Compile " + "api documentation".bold.underline + ".")
+	.option("-Y, --YUI", "Run " + "api documentation".bold.underline + " as a server (at port 5000).")
 	.option("-w, --watch", "Watch".red + " all typescript files in public folder.\n\n" + "Build\n".yellow)
 	.option("-B, --build", "Compile and " + "minify".cyan + " stylesheet & javascript for production.")
 	.option("-b, --devBuild", "Compile and " + "minify".cyan + " stylesheet & javascript for development.\n\n" + "Test & Coverage\n".green)
 	.option("-t, --test [config]", "Unit " + "test".bold.inverse + " project using Mocha", configinput)
 	.option("-C, --coverage [config]", "Generate " + "test coverage report".underline.magenta + " using Mocha\n\n" + "Start\n".cyan, configinput)
 	.option("-s, --start [file]", "Start server using node [optional file] (default to development mode)" + "\n\nTest options:\n".blue, fileinput)
-	.option("-T, --target [target]", "Unit test " + "target".green + " (s: server, c: client, default to both.)", targetinput)
+	.option("-T, --target [target]", "Unit test " + "target".green + " (s: server, c: client (karma), S: client (selenium), default to all.)", targetinput)
 	.option("-I, --inBrowser [browser]", "Run frontend test in [browser]", browserinput)
 	.option("-m, --multiruns", "Disable single run for client tests using karma (option of --test & --coverage)" + "\n\nStart options:\n".magenta, portinput)
 	.option("-p, --production [port]", "Start server in " + "deployment".rainbow.bold.italic.underline + " mode. [optional port #, default: 80] (option of --start)", portinput)
 	.option("-x, --nginx", "Start server in production with " + "nginx".bold.inverse + ". (static files are served by Nginx, ignored if not in production, option of --start)\n")
-	.option("-d, --debug", "Debug".cyan + " server using CLI.  (option of --start, not compatible with nodemon / forever)")
+	.option("-d, --debug", "Debug".cyan + " server using command line.  (option of --start, not compatible with nodemon / forever)")
+	.option("-D, --debugBrowser", "Debug".cyan + " server using a browser.  (option of --start, not compatible with forever)")
 	.option("-n, --nodemon", "Start server with " + 'nodemon'.green + " (" + "supervisor".cyan + " in ubuntu) instead of " + 'node'.yellow + ".  (option of --start)")
 	.option("-f, --forever", "Start server with " + 'forever'.red + ".  (option of --start)\n")
 	.option("-c, --cluster", "Start server using " + 'cluster.js'.yellow + ".  (option of --start)")
@@ -709,14 +768,19 @@ __cli__
 #-------------------------------------------------------------------------------------
 main = (callback) ->
 	if __cli__.start
-		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild)
+		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild  || __cli__.watch || __cli__.eliminate || __cli__.link || __cli__.yui || __cli__.YUI)
+
 
 		if (__cli__.debug && (__cli__.nodemon || __cli__.forever))
 			console.log('Debug is not compatible with nodemon or forever.'.red)
 			return
 
-		if (__cli__.debug && (__cli__.production || __cli__.nginx))
+		if ((__cli__.debug || __cli__.debugBrowser) && (__cli__.production || __cli__.nginx))
 			console.log('Debug should not be ran in production environment.'.red)
+			return
+
+		if (__cli__.debug && __cli__.debugBrowser)
+			console.log('Debug should not be ran in parallel with debug in browser.'.red)
 			return
 
 		__async__.series([(callback) ->
@@ -752,48 +816,89 @@ main = (callback) ->
 
 			process.env.NODE_ENV = envToLaunch
 
-			if file
-				fileToLaunch = file
-			else if __cli__.cluster || __cli__.instance || __cli__.server || __cli__.app
-				fileToLaunch = if __cli__.cluster then 'cluster.js' else if __cli__.instance then 'instance.js' else if __cli__.server then 'server.js' else 'app.js'
-			else
-				fileToLaunch = 'app.js' if __fs__.existsSync 'app.js'
-				fileToLaunch = 'server.js' if __fs__.existsSync 'server.js'
-				fileToLaunch = 'instance.js' if __fs__.existsSync 'instance.js'
-				fileToLaunch = 'cluster.js' if __fs__.existsSync 'cluster.js'
+			if (__cli__.debugBrowser)
+				cmd = 'node-inspector --web-port=1234'
+				run(cmd, null)
+				cmd = opencmd + ' http://127.0.0.1:1234/debug?port=5858'
+				run(cmd, callback)
 
-			if (!fileToLaunch || !__fs__.existsSync(fileToLaunch))
-				if (fileToLaunch)
-					console.log((fileToLaunch+' not found.').red)
+			else 
+				if file
+					fileToLaunch = file
+				else if __cli__.cluster || __cli__.instance || __cli__.server || __cli__.app
+					fileToLaunch = if __cli__.cluster then 'cluster.js' else if __cli__.instance then 'instance.js' else if __cli__.server then 'server.js' else 'app.js'
 				else
-					console.log('No valid node.js app found.'.red)
-				return
-			else
-				console.log(appToLaunch.green + ' ' + fileToLaunch.yellow + (' (' + envToLaunch + (if portToLaunch then ' '+portToLaunch else '') + ')').cyan)
+					fileToLaunch = 'app.js' if __fs__.existsSync 'app.js'
+					fileToLaunch = 'server.js' if __fs__.existsSync 'server.js'
+					fileToLaunch = 'instance.js' if __fs__.existsSync 'instance.js'
+					fileToLaunch = 'cluster.js' if __fs__.existsSync 'cluster.js'
 
-			server = null
-
-			childEnv  = process.env
-			childEnv.NODE_ENV = envToLaunch
-			childEnv.PORT = portToLaunch if (portToLaunch)
-
-			if __cli__.debug
-				server = __cp__.spawn('node', ['debug', fileToLaunch], {stdio: 'inherit', env: childEnv})
-			else
-				if __cli__.production
-					if (__cli__.forever)
-						server = __cp__.spawn('/usr/bin/sudo', ['-E', 'forever', 'start', '-c', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
+				if (!fileToLaunch || !__fs__.existsSync(fileToLaunch))
+					if (fileToLaunch)
+						console.log((fileToLaunch+' not found.').red)
 					else
-						server = __cp__.spawn('/usr/bin/sudo', ['-E', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
+						console.log('No valid node.js app found.'.red)
+					return
 				else
-					if (__cli__.forever)
-						server = __cp__.spawn('forever', ['start', '-c', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
+					console.log(appToLaunch.green + ' ' + fileToLaunch.yellow + (' (' + envToLaunch + (if portToLaunch then ' '+portToLaunch else '') + ')').cyan)
+
+				server = null
+
+				childEnv  = process.env
+				childEnv.NODE_ENV = envToLaunch
+				childEnv.PORT = portToLaunch if (portToLaunch)
+
+				if __cli__.debug
+					nodemon = if process.platform != 'darwin' then 'node' else 'nodemon'
+					server = __cp__.spawn(nodemon, ['debug', fileToLaunch], {stdio: 'inherit', env: childEnv})
+				else
+					if __cli__.production
+						if (__cli__.forever)
+							server = __cp__.spawn('/usr/bin/sudo', ['-E', 'forever', 'start', '-c', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
+						else
+							server = __cp__.spawn('/usr/bin/sudo', ['-E', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
 					else
-						server = __cp__.spawn(appToLaunch, [fileToLaunch], {stdio: 'inherit', env: childEnv})
+						if (__cli__.forever)
+							server = __cp__.spawn('forever', ['start', '-c', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
+						else
+							server = __cp__.spawn(appToLaunch, [fileToLaunch], {stdio: 'inherit', env: childEnv})
+				server.on('exit', () ->
+					callback()
+				)
+		])
+	else if __cli__.yui
+		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild  || __cli__.watch || __cli__.eliminate || __cli__.link || __cli__.YUI)
+
+		__async__.series([(callback) ->
+			cmd = 'mkdir -p documentations'
+			run(cmd, callback)
+		, (callback) ->
+			server = __cp__.spawn('yuidoc', ['-c', 'config/yuidoc/config.json'], {stdio: 'inherit', env: process.env})
 			server.on('exit', () ->
 				callback()
 			)
-		])
+		], (err, results) ->
+			cmd = opencmd + ' documentations/index.html'
+			run(cmd, callback)
+		)
+
+	else if __cli__.YUI
+		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild  || __cli__.watch || __cli__.eliminate || __cli__.link)
+
+		__async__.series([(callback) ->
+			server = __cp__.spawn('yuidoc', ['-c', 'config/yuidoc/config.json', '--server', '5000'], {stdio: 'inherit', env: process.env})
+			setTimeout(callback, 2000)
+		# , (callback) ->
+		# 	cmd = opencmd + ' http://localhost:5000'
+		# 	run(cmd, callback)
+		], (err, results) ->
+
+		)
+
+	else if __cli__.link
+		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild || __cli__.watch || __cli__.eliminate)
+
+		link()
 
 	else if __cli__.eliminate
 		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild || __cli__.watch)
@@ -843,11 +948,12 @@ main = (callback) ->
 	callback()
 
 #-------------------------------------------------------------------------------------
-# IcyCupCake Code Entry Point
+# chocoCupCake Code Entry Point
 #-------------------------------------------------------------------------------------
 
 __async__.series([(callback) ->
 	if __cli__.skip then callback() else update(callback)
+	# callback()
 , (callback) ->
-	main(callback) if !__cli__.update
+	main(callback)
 ])

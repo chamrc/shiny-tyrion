@@ -1,11 +1,11 @@
 {
-  "name": "icycupcake",
-  "version": "0.8.21",
+  "name": "chococupcake",
+  "version": "0.0.2",
   "description": "Command line helper",
   "preferGlobal": "true",
   "bin": {
     "cupcake": "cupcake",
-    "icc": "cupcake"
+    "ccc": "cupcake"
   },
   "author": "Ranchao Zhang",
   "engines": {
