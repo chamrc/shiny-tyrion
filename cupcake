@@ -668,6 +668,15 @@ unbake = (callback) ->
 	)
 
 #-------------------------------------------------------------------------------------
+# expand tabs to spaces
+#-------------------------------------------------------------------------------------
+
+expand = (callback) ->
+	if (!expandFolders) then expandFolders = '.'
+	cmd = 'find ' + expandFolders + " -type f -name '*.ts' -or -name '*.js' -or -name '*.less' -or -name '*.css' -or -name '*.json' -or -name '*.rb' -or -name '*.html' | while read infile; do expand -t 4 \"$infile\" > _tmp_ && mv _tmp_ \"$infile\"; done"
+	run(cmd, callback)
+
+#-------------------------------------------------------------------------------------
 # Check if in project root
 #-------------------------------------------------------------------------------------
 
@@ -739,7 +748,7 @@ __cli__
 	.option("", "\nHelper\n".red)
 	.option("-u, --update", "Manually update ChocoCupCake.")
 	.option("-S, --skip", "Skip auto update of ChocoCupCake.")
-	.option("-E, --expand [folders_to_expand]", "Expand tabs to spaces.", expandinput)
+	.option("-E, --expand [folders]", "Expand tabs to spaces.", expandinput)
 	.option("-l, --link", 'Link'.yellow + " files.")
 	.option("-h, --halt", "Stop all running scripts of " + 'forever'.green + ".")
 	.option("-e, --eliminate", "Eliminate all .d.ts .js .js.map for each .ts file in public/core and public/modules.")
@@ -772,7 +781,7 @@ __cli__
 #-------------------------------------------------------------------------------------
 main = (callback) ->
 	if __cli__.start
-		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild  || __cli__.watch || __cli__.eliminate || __cli__.link || __cli__.yui || __cli__.YUI)
+		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild  || __cli__.watch || __cli__.eliminate || __cli__.link || __cli__.yui || __cli__.YUI || __cli__.expand)
 
 
 		if (__cli__.debug && (__cli__.nodemon || __cli__.forever))
@@ -870,6 +879,11 @@ main = (callback) ->
 					callback()
 				)
 		])
+	else if __cli__.expand
+		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild  || __cli__.watch || __cli__.eliminate || __cli__.link || __cli__.yui || __cli__.YUI)
+
+		expand()
+
 	else if __cli__.yui
 		__cli__.help() if (__cli__.test || __cli__.halt || __cli__.build || __cli__.remove || __cli__.coverage || __cli__.devBuild  || __cli__.watch || __cli__.eliminate || __cli__.link || __cli__.YUI)
 
