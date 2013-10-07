@@ -673,7 +673,7 @@ unbake = (callback) ->
 
 expand = (callback) ->
 	if (!expandFolders) then expandFolders = '.'
-	cmd = 'find ' + expandFolders + " -type f -name '*.ts' -or -name '*.js' -or -name '*.less' -or -name '*.css' -or -name '*.json' -or -name '*.rb' -or -name '*.html' | while read infile; do expand -t 4 \"$infile\" > _tmp_ && mv _tmp_ \"$infile\"; done"
+	cmd = 'find ' + expandFolders + " -type f -name '*.ts' -or -name '*.js' -or -name '*.less' -or -name '*.css' -or -name '*.json' -or -name '*.rb' -or -name '*.html' | while read infile; do if [[ ! \"$infile\" == *\"node_modules\"* ]]; then expand -t 4 \"$infile\" > _tmp_ && mv _tmp_ \"$infile\"; fi; done"
 	run(cmd, callback)
 
 #-------------------------------------------------------------------------------------
