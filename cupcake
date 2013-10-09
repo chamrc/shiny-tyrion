@@ -865,7 +865,7 @@ main = (callback) ->
 					nodemon = if process.platform != 'darwin' then 'node' else 'nodemon'
 					server = __cp__.spawn(nodemon, ['debug', fileToLaunch], {stdio: 'inherit', env: childEnv})
 				else
-					if __cli__.production
+					if process.platform != 'darwin'
 						if (__cli__.forever)
 							server = __cp__.spawn('/usr/bin/sudo', ['-E', 'forever', 'start', '-c', appToLaunch, fileToLaunch], {stdio: 'inherit', env: childEnv})
 						else
