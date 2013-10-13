@@ -20,7 +20,7 @@ __fs__ = require('fs')
 version = require('./package.json').version
 
 usage  = "-s [-n -p -f -c -i] | -t [<config> -T <target>] | -C [<config> -T <target>] | -h | -w\n\t ".green + "ccc " + "-s [-n -p -f -c -i] | -t [<config> -T <target>] | -C [<config> -T <target>] | -h | -w\n\n  ".green
-usage += 'Note: ' + 'By default (if no option/file specified), chococupcake search for file to run\n\tin the following order:\n\t '
+usage += 'Note: ' + 'By default (if no option/file specified), slg search for file to run\n\tin the following order:\n\t '
 usage += 'cluster.js -> instance.js -> server.js -> app.js'.underline.yellow
 
 file = null
@@ -704,9 +704,9 @@ eliminate = (callback) ->
 
 update = (callback) ->
 	__async__.waterfall([(callback) ->
-		process.stdout.write('Checking chococupcake version ... '.green)
+		process.stdout.write('Checking slg version ... '.green)
 
-		cmd = 'npm show chococupcake version'
+		cmd = 'npm show slg version'
 		exec(cmd, (data) ->
 			data = data.replace(/\s+/g, '');
 			callback(null, data == version)
@@ -717,11 +717,11 @@ update = (callback) ->
 			console.log('Already at latest version'.green)
 			callback()
 		else
-			console.log('Updating chococupcake'.green)
+			console.log('Updating slg'.green)
 			if (process.platform != 'darwin') # Ubuntu
-				cmd = 'sudo npm i -g chococupcake'
+				cmd = 'sudo npm i -g slg'
 			else
-				cmd = 'npm i -g chococupcake'
+				cmd = 'npm i -g slg'
 			run(cmd, () ->
 				console.log('Please rerun your previous script command.'.green) if (!__cli__.update)
 				process.kill()

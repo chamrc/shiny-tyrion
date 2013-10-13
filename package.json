@@ -1,11 +1,10 @@
 {
-  "name": "chococupcake",
-  "version": "0.0.8",
+  "name": "slg",
+  "version": "0.0.2",
   "description": "Command line helper",
   "preferGlobal": "true",
   "bin": {
-    "cupcake": "cupcake",
-    "ccc": "cupcake"
+    "slg": "cupcake"
   },
   "author": "Ranchao Zhang",
   "engines": {
